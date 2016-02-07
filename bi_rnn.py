@@ -116,7 +116,7 @@ def main():
     # Create update expressions for training.
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = 10
-    learning_rate = 0.01
+    learning_rate = 0.1
     decay_rate = 0.0
     momentum = 0.9
     params = lasagne.layers.get_all_params(layer_output, trainable=True)
