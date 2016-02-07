@@ -130,8 +130,10 @@ def main():
     # Finally, launch the training loop.
     logger.info("Start training (number of training data: %d..." % (num_data))
     num_batches = num_data / batch_size
-    num_epochs = 100
-    for epoch in range(1, num_epochs):
+    num_epochs = 1000
+    best_loss = 1e+12
+    stop_count = 0
+    for epoch in range(1, num_epochs + 1):
         print 'Epoch %d: ' % epoch
         train_err = 0.0
         train_corr = 0.0
@@ -151,7 +153,7 @@ def main():
 
             # update log
             sys.stdout.write("\b" * num_back)
-            log_info = 'train: %d/%d loss: %.4f acc: %.2f time left (estimated): %.2fs' % (
+            log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
                 min(train_batches * batch_size, num_data), num_data,
                 train_err / train_total, train_corr * 100 / train_total, time_left)
             sys.stdout.write(log_info)
@@ -167,14 +169,38 @@ def main():
             dev_err += err * num
             dev_corr += corr
             dev_total += num
-        print '\ndev loss: %.4f corr: %d total: %d acc: %.2f' % (
+        print '\ndev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
+
+        if best_loss < dev_err:
+            stop_count += 1
+        else:
+            best_loss = dev_err
+            stop_count = 0
+
+        # stop if dev acc decrease 3 time straightly.
+        if stop_count == 3:
+            break
 
         # re-compile a function with new learning rate for training
         lr = learning_rate / (1.0 + epoch * decay_rate)
         updates = lasagne.updates.sgd(loss_train, params=params, learning_rate=lr)
         train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss],
                                    updates=updates)
+
+    # evaluate on test data.
+    logger.info("evaluating test performance...")
+    test_err = 0.0
+    test_corr = 0.0
+    test_total = 0
+    for batch in utils.iterate_minibatches(X_test, Y_test, mask_test, batch_size):
+        inputs, targets, masks = batch
+        err, corr, num = eval_fn(inputs, targets, masks)
+        test_err += err * num
+        test_corr += corr
+        test_total += num
+    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+        test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 
 
 if __name__ == '__main__':
