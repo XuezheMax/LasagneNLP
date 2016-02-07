@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
+    parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
@@ -50,6 +51,7 @@ def main():
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
+    update_algo = args.update
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, num_labels = data_processor.load_dataset_sequence_labeling(train_path, dev_path, test_path, oov=oov,
@@ -122,7 +124,7 @@ def main():
     decay_rate = 0.1
     momentum = 0.9
     params = lasagne.layers.get_all_params(layer_output, trainable=True)
-    updates = lasagne.updates.sgd(loss_train, params=params, learning_rate=learning_rate)
+    updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss], updates=updates)
@@ -130,13 +132,14 @@ def main():
     eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
-    logger.info("Start training (number of training data: %d, batch size: %d..." % (num_data, batch_size))
+    logger.info("Start training: %s (#training data: %d, batch size: %d)..." % (update_algo, num_data, batch_size))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
     stop_count = 0
+    lr = learning_rate
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d: ' % epoch
+        print 'Epoch %d (learning rate=%.4f): ' % (epoch, lr)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
@@ -186,7 +189,7 @@ def main():
 
         # re-compile a function with new learning rate for training
         lr = learning_rate / (1.0 + epoch * decay_rate)
-        updates = lasagne.updates.sgd(loss_train, params=params, learning_rate=lr)
+        updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
         train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss],
                                    updates=updates)
 

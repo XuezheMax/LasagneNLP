@@ -3,6 +3,7 @@ __author__ = 'max'
 import logging
 import sys
 import numpy as np
+import lasagne
 
 
 def get_logger(name, level=logging.INFO, handler=sys.stdout,
@@ -52,3 +53,24 @@ def iterate_minibatches(inputs, targets, masks, batchsize, shuffle=False):
         else:
             excerpt = slice(start_idx, start_idx + batchsize)
         yield inputs[excerpt], targets[excerpt], masks[excerpt]
+
+
+def create_updates(loss, params, update_algo, learning_rate, momentum=None):
+    """
+    create updates for training
+    :param loss: loss for gradient
+    :param params: parameters for update
+    :param update_algo: update algorithm
+    :param learning_rate: learning rate
+    :param momentum: momentum
+    :return: updates
+    """
+
+    if update_algo == 'sgd':
+        return lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate)
+    elif update_algo == 'momentum':
+        return lasagne.updates.momentum(loss, params == params, learning_rate=learning_rate, momentum=momentum)
+    elif update_algo == 'nesterov':
+        return lasagne.updates.nesterov_momentum(loss, params=params, learning_rate=learning_rate, momentum=momentum)
+    else:
+        raise ValueError('unkown update algorithm: %s' % update_algo)
