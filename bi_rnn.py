@@ -130,7 +130,7 @@ def main():
     eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
-    logger.info("Start training (number of training data: %d..." % (num_data))
+    logger.info("Start training (number of training data: %d, batch size: %d..." % (num_data, batch_size))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
