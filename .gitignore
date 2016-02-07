@@ -60,3 +60,18 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# PyBuilder
+target/
+
+# data dir
+/data/
+
+# model dir
+/models/
+
+# IDE 
+/.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
