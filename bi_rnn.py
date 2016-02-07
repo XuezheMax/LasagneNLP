@@ -17,6 +17,8 @@ def main():
     parser.add_argument('--embedding', choices=['word2vec', 'senna'], help='Embedding for words', required=True)
     parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
                         help='path for embedding dict')
+    parser.add_argument('--batch_size', default=10, help='Number of sentences in each batch')
+    parser.add_argument('--num_units', default=100, help='Number of hidden units in RNN')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
@@ -71,7 +73,7 @@ def main():
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
     # construct bi-rnn
-    num_units = 100
+    num_units = args.num_units
     bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask)
 
     # reshape bi-rnn to [batch * max_length, embedd_dim]
@@ -115,9 +117,9 @@ def main():
 
     # Create update expressions for training.
     # hyper parameters to tune: learning rate, momentum, regularization.
-    batch_size = 10
+    batch_size = args.batch_size
     learning_rate = 0.1
-    decay_rate = 0.0
+    decay_rate = 0.1
     momentum = 0.9
     params = lasagne.layers.get_all_params(layer_output, trainable=True)
     updates = lasagne.updates.sgd(loss_train, params=params, learning_rate=learning_rate)
