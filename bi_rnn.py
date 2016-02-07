@@ -17,8 +17,8 @@ def main():
     parser.add_argument('--embedding', choices=['word2vec', 'senna'], help='Embedding for words', required=True)
     parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
                         help='path for embedding dict')
-    parser.add_argument('--batch_size', default=10, help='Number of sentences in each batch')
-    parser.add_argument('--num_units', default=100, help='Number of hidden units in RNN')
+    parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
+    parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
