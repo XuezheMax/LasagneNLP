@@ -1,7 +1,6 @@
 __author__ = 'max'
 
 import numpy as np
-from gensim.models.word2vec import Word2Vec
 import theano
 
 from alphabet import Alphabet
@@ -162,32 +161,26 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         logger.info("Maximum length of test set is %d" % (max_length_test))
         logger.info("Maximum length used for training is %d" % (max_length))
 
-        if embedding == 'word2vec':
-            # loading word2vec
-            logger.info("Loading word2vec ...")
-            word2vec = Word2Vec.load_word2vec_format(embedding_path, binary=True)
-            embedd_dim = word2vec.vector_size
-            logger.info("Dimension of embedding is %d" % (embedd_dim))
-
-            # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
-            X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
-                                                                      label_index_sentences_train, max_length)
-            X_dev, Y_dev, mask_dev = construct_tensor_fine_tune(word_index_sentences_dev, label_index_sentences_dev,
-                                                                max_length)
-            X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test,
-                                                                   label_index_sentences_test, max_length)
-            return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-                   build_embedd_table(word_alphabet, word2vec, embedd_dim), label_alphabet.size() - 1
-        elif embedding == 'senna':
-            return None
-        else:
-            raise ValueError("embedding should choose from [word2vec, senna]")
+        embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        logger.info("Dimension of embedding is %d" % (embedd_dim))
+        # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
+        X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
+                                                                  label_index_sentences_train, max_length)
+        X_dev, Y_dev, mask_dev = construct_tensor_fine_tune(word_index_sentences_dev, label_index_sentences_dev,
+                                                            max_length)
+        X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test,
+                                                               label_index_sentences_test, max_length)
+        return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
+               build_embedd_table(word_alphabet, embedd_dict, embedd_dim), label_alphabet.size() - 1
 
     def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict, max_length,
                                        embedd_dim):
         X = np.empty([len(word_sentences), max_length, embedd_dim], dtype=theano.config.floatX)
         Y = np.empty([len(word_sentences), max_length], dtype=np.int32)
         mask = np.zeros([len(word_sentences), max_length], dtype=theano.config.floatX)
+
+        bad_dict = dict()
+        bad_num = 0
         for i in range(len(word_sentences)):
             words = word_sentences[i]
             label_ids = label_index_sentences[i]
@@ -199,12 +192,25 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
                 X[i, j, :] = embedd
                 Y[i, j] = label - 1
 
+                if word not in embedd_dict:
+                    bad_num += 1
+                    if word in bad_dict:
+                        bad_dict[word] += 1
+                    else:
+                        bad_dict[word] = 1
+
             # Zero out X after the end of the sequence
             X[i, length:] = np.zeros([1, embedd_dim], dtype=theano.config.floatX)
             # Copy the last label after the end of the sequence
             Y[i, length:] = Y[i, length - 1]
             # Make the mask for this sample 1 within the range of length
             mask[i, :length] = 1
+
+        for w, c in bad_dict.items():
+            if c >= 100:
+                print "%s: %d" % (w, c)
+        print bad_num
+
         return X, Y, mask
 
     def generate_dataset_not_fine_tune(word_sentences_train, label_index_sentences_train, word_sentences_dev,
@@ -233,28 +239,20 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         logger.info("Maximum length of test set is %d" % (max_length_test))
         logger.info("Maximum length used for training is %d" % (max_length))
 
-        if embedding == 'word2vec':
-            # loading word2vec
-            logger.info("Loading word2vec ...")
-            word2vec = Word2Vec.load_word2vec_format(embedding_path, binary=True)
-            embedd_dim = word2vec.vector_size
-            logger.info("Dimension of embedding is %d" % (embedd_dim))
+        embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        logger.info("Dimension of embedding is %d" % (embedd_dim))
 
-            # fill data tensor (X.shape = [#data, max_length, embedding_dim], Y.shape = [#data, max_length])
-            unknown_embedd = np.random.uniform(-0.01, 0.01, [1, embedd_dim])
-            X_train, Y_train, mask_train = construct_tensor_not_fine_tune(word_sentences_train,
-                                                                          label_index_sentences_train, unknown_embedd,
-                                                                          word2vec, max_length, embedd_dim)
-            X_dev, Y_dev, mask_dev = construct_tensor_not_fine_tune(word_sentences_dev, label_index_sentences_dev,
-                                                                    unknown_embedd, word2vec, max_length, embedd_dim)
-            X_test, Y_test, mask_test = construct_tensor_not_fine_tune(word_sentences_test, label_index_sentences_test,
-                                                                       unknown_embedd, word2vec, max_length, embedd_dim)
-            return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-                   None, label_alphabet.size() - 1
-        elif embedding == 'senna':
-            return None
-        else:
-            raise ValueError("embedding should choose from [word2vec, senna]")
+        # fill data tensor (X.shape = [#data, max_length, embedding_dim], Y.shape = [#data, max_length])
+        unknown_embedd = np.random.uniform(-0.01, 0.01, [1, embedd_dim])
+        X_train, Y_train, mask_train = construct_tensor_not_fine_tune(word_sentences_train,
+                                                                      label_index_sentences_train, unknown_embedd,
+                                                                      embedd_dict, max_length, embedd_dim)
+        X_dev, Y_dev, mask_dev = construct_tensor_not_fine_tune(word_sentences_dev, label_index_sentences_dev,
+                                                                unknown_embedd, embedd_dict, max_length, embedd_dim)
+        X_test, Y_test, mask_test = construct_tensor_not_fine_tune(word_sentences_test, label_index_sentences_test,
+                                                                   unknown_embedd, embedd_dict, max_length, embedd_dim)
+        return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
+               None, label_alphabet.size() - 1
 
     word_alphabet = Alphabet('word')
     label_alphabet = Alphabet(label_name)

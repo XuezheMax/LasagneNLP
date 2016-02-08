@@ -4,6 +4,9 @@ import logging
 import sys
 import numpy as np
 import lasagne
+from gensim.models.word2vec import Word2Vec
+import gzip
+import theano.config.floatX as floatX
 
 
 def get_logger(name, level=logging.INFO, handler=sys.stdout,
@@ -18,6 +21,38 @@ def get_logger(name, level=logging.INFO, handler=sys.stdout,
 
     return logger
 
+
+def load_word_embedding_dict(embedding, embedding_path, logger):
+    if embedding == 'word2vec':
+        # loading word2vec
+        logger.info("Loading word2vec ...")
+        word2vec = Word2Vec.load_word2vec_format(embedding_path, binary=True)
+        embedd_dim = word2vec.vector_size
+        return word2vec, embedd_dim
+    elif embedding == 'glove':
+        # loading GloVe
+        logger.info("Loading GloVe ...")
+        embedd_dim = -1
+        embedd_dict = dict()
+        with gzip.open(embedding_path, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if len(line) == 0:
+                    continue
+
+                tokens = line.split()
+                if embedd_dim < 0:
+                    embedd_dim = len(tokens) - 1
+                else:
+                    assert(embedd_dim + 1 == len(tokens))
+                embedd = np.empty([1, embedd_dim], dtype=floatX)
+                embedd[:] = tokens[1:]
+                embedd_dict[tokens[0]] = embedd
+        return embedd_dict, embedd_dim
+    elif embedding == 'senna':
+        return None
+    else:
+        raise ValueError("embedding should choose from [word2vec, senna]")
 
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in

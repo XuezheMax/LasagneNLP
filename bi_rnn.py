@@ -14,7 +14,8 @@ import lasagne.nonlinearities as nonlinearities
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
-    parser.add_argument('--embedding', choices=['word2vec', 'senna'], help='Embedding for words', required=True)
+    parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
+                        required=True)
     parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
                         help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
@@ -218,7 +219,7 @@ def main():
                                    updates=updates)
 
     # print best performance on test data.
-    logger.info("final best test performance (at epoch %d" % (best_epoch))
+    logger.info("final best test performance (at epoch %d)" % (best_epoch))
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 
