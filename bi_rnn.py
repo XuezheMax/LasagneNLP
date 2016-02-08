@@ -168,6 +168,11 @@ def main():
                 train_err / train_total, train_corr * 100 / train_total, time_left)
             sys.stdout.write(log_info)
             num_back = len(log_info)
+        # update training log after each epoch
+        sys.stdout.write("\b" * num_back)
+        print 'train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
+            min(train_batches * batch_size, num_data), num_data,
+            train_err / train_total, train_corr * 100 / train_total, time.time() - start_time)
 
         # evaluate performance on dev data
         dev_err = 0.0
@@ -179,7 +184,7 @@ def main():
             dev_err += err * num
             dev_corr += corr
             dev_total += num
-        print '\ndev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+        print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
 
         if best_loss < dev_err:
