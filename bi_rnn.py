@@ -76,7 +76,7 @@ def main():
 
     # construct bi-rnn
     num_units = args.num_units
-    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask)
+    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask, grad_clipping=5)
 
     # reshape bi-rnn to [batch * max_length, embedd_dim]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
@@ -103,7 +103,7 @@ def main():
     loss_train = (loss_train * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
     # l2 regularization?
     if regular == 'l2':
-        gamma = 1e-4
+        gamma = 1e-6
         l2_penalty = lasagne.regularization.regularize_network_params(layer_output, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
 
