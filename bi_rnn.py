@@ -19,6 +19,7 @@ def main():
                         help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
+    parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
@@ -52,6 +53,7 @@ def main():
     dev_path = args.dev
     test_path = args.test
     update_algo = args.update
+    grad_clipping = args.grad_clipping
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, num_labels = data_processor.load_dataset_sequence_labeling(train_path, dev_path, test_path, oov=oov,
@@ -76,7 +78,7 @@ def main():
 
     # construct bi-rnn
     num_units = args.num_units
-    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask, grad_clipping=5)
+    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask, grad_clipping=grad_clipping)
 
     # reshape bi-rnn to [batch * max_length, embedd_dim]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
@@ -132,12 +134,15 @@ def main():
     eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
-    logger.info("Start training: %s (#training data: %d, batch size: %d)..." % (update_algo, num_data, batch_size))
+    logger.info("Start training: %s with regularization %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+                % (update_algo, regular, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
+    best_epoch = 0
     stop_count = 0
     lr = learning_rate
+    patience = 5
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=%.4f): ' % (epoch, lr)
         train_err = 0.0
@@ -183,8 +188,22 @@ def main():
             best_loss = dev_err
             stop_count = 0
 
+            # evaluate on test data when better performance detected
+            best_epoch = epoch
+            test_err = 0.0
+            test_corr = 0.0
+            test_total = 0
+            for batch in utils.iterate_minibatches(X_test, Y_test, mask_test, batch_size):
+                inputs, targets, masks = batch
+                err, corr, num = eval_fn(inputs, targets, masks)
+                test_err += err * num
+                test_corr += corr
+                test_total += num
+            print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+                test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
+
         # stop if dev acc decrease 3 time straightly.
-        if stop_count == 3:
+        if stop_count == patience:
             break
 
         # re-compile a function with new learning rate for training
@@ -193,17 +212,8 @@ def main():
         train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss],
                                    updates=updates)
 
-    # evaluate on test data.
-    logger.info("evaluating test performance...")
-    test_err = 0.0
-    test_corr = 0.0
-    test_total = 0
-    for batch in utils.iterate_minibatches(X_test, Y_test, mask_test, batch_size):
-        inputs, targets, masks = batch
-        err, corr, num = eval_fn(inputs, targets, masks)
-        test_err += err * num
-        test_corr += corr
-        test_total += num
+    # print best performance on test data.
+    logger.info("final best test performance (at epoch %d" % (best_epoch))
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 
