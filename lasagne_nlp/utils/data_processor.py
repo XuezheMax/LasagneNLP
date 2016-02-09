@@ -124,12 +124,13 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
             mask[i, :length] = 1
         return X, Y, mask
 
-    def build_embedd_table(word_alphabet, embedd_dict, embedd_dim):
+    def build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless):
         scale = np.sqrt(3.0 / embedd_dim)
         embedd_table = np.empty([word_alphabet.size(), embedd_dim], dtype=theano.config.floatX)
         embedd_table[word_alphabet.default_index, :] = np.random.uniform(-scale, scale, [1, embedd_dim])
         for word, index in word_alphabet.iteritems():
-            embedd = embedd_dict[word] if word in embedd_dict else np.random.uniform(-scale, scale, [1, embedd_dim])
+            ww = word.lower() if caseless else word
+            embedd = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale, [1, embedd_dim])
             embedd_table[index, :] = embedd
         return embedd_table
 
@@ -161,8 +162,8 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         logger.info("Maximum length of test set is %d" % (max_length_test))
         logger.info("Maximum length used for training is %d" % (max_length))
 
-        embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path, logger)
-        logger.info("Dimension of embedding is %d" % (embedd_dim))
+        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
         # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
         X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
                                                                   label_index_sentences_train, max_length)
@@ -171,33 +172,33 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test,
                                                                label_index_sentences_test, max_length)
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-               build_embedd_table(word_alphabet, embedd_dict, embedd_dim), label_alphabet.size() - 1
+               build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless), label_alphabet.size() - 1
 
     def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict, max_length,
-                                       embedd_dim):
+                                       embedd_dim, caseless):
         X = np.empty([len(word_sentences), max_length, embedd_dim], dtype=theano.config.floatX)
         Y = np.empty([len(word_sentences), max_length], dtype=np.int32)
         mask = np.zeros([len(word_sentences), max_length], dtype=theano.config.floatX)
 
-        bad_dict = dict()
-        bad_num = 0
+        # bad_dict = dict()
+        # bad_num = 0
         for i in range(len(word_sentences)):
             words = word_sentences[i]
             label_ids = label_index_sentences[i]
             length = len(words)
             for j in range(length):
-                word = words[j]
+                word = words[j].lower() if caseless else words[j]
                 label = label_ids[j]
                 embedd = embedd_dict[word] if word in embedd_dict else unknown_embedd
                 X[i, j, :] = embedd
                 Y[i, j] = label - 1
 
-                if word not in embedd_dict:
-                    bad_num += 1
-                    if word in bad_dict:
-                        bad_dict[word] += 1
-                    else:
-                        bad_dict[word] = 1
+                # if word not in embedd_dict:
+                #     bad_num += 1
+                #     if word in bad_dict:
+                #         bad_dict[word] += 1
+                #     else:
+                #         bad_dict[word] = 1
 
             # Zero out X after the end of the sequence
             X[i, length:] = np.zeros([1, embedd_dim], dtype=theano.config.floatX)
@@ -206,10 +207,10 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
             # Make the mask for this sample 1 within the range of length
             mask[i, :length] = 1
 
-        for w, c in bad_dict.items():
-            if c >= 100:
-                print "%s: %d" % (w, c)
-        print bad_num
+        # for w, c in bad_dict.items():
+        #     if c >= 100:
+        #         print "%s: %d" % (w, c)
+        # print bad_num
 
         return X, Y, mask
 
@@ -239,18 +240,20 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         logger.info("Maximum length of test set is %d" % (max_length_test))
         logger.info("Maximum length used for training is %d" % (max_length))
 
-        embedd_dict, embedd_dim = utils.load_word_embedding_dict(embedding, embedding_path, logger)
-        logger.info("Dimension of embedding is %d" % (embedd_dim))
+        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        logger.info("Dimension of embedding is %d, Caseless: %s" % (embedd_dim, caseless))
 
         # fill data tensor (X.shape = [#data, max_length, embedding_dim], Y.shape = [#data, max_length])
         unknown_embedd = np.random.uniform(-0.01, 0.01, [1, embedd_dim])
         X_train, Y_train, mask_train = construct_tensor_not_fine_tune(word_sentences_train,
                                                                       label_index_sentences_train, unknown_embedd,
-                                                                      embedd_dict, max_length, embedd_dim)
+                                                                      embedd_dict, max_length, embedd_dim, caseless)
         X_dev, Y_dev, mask_dev = construct_tensor_not_fine_tune(word_sentences_dev, label_index_sentences_dev,
-                                                                unknown_embedd, embedd_dict, max_length, embedd_dim)
+                                                                unknown_embedd, embedd_dict, max_length, embedd_dim,
+                                                                caseless)
         X_test, Y_test, mask_test = construct_tensor_not_fine_tune(word_sentences_test, label_index_sentences_test,
-                                                                   unknown_embedd, embedd_dict, max_length, embedd_dim)
+                                                                   unknown_embedd, embedd_dict, max_length, embedd_dim,
+                                                                   caseless)
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
                None, label_alphabet.size() - 1
 

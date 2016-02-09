@@ -23,12 +23,19 @@ def get_logger(name, level=logging.INFO, handler=sys.stdout,
 
 
 def load_word_embedding_dict(embedding, embedding_path, logger):
+    """
+    load word embeddings from file
+    :param embedding:
+    :param embedding_path:
+    :param logger:
+    :return: embedding dict, embedding dimention, caseless
+    """
     if embedding == 'word2vec':
         # loading word2vec
         logger.info("Loading word2vec ...")
         word2vec = Word2Vec.load_word2vec_format(embedding_path, binary=True)
         embedd_dim = word2vec.vector_size
-        return word2vec, embedd_dim
+        return word2vec, embedd_dim, False
     elif embedding == 'glove':
         # loading GloVe
         logger.info("Loading GloVe ...")
@@ -48,7 +55,7 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
                 embedd[:] = tokens[1:]
                 embedd_dict[tokens[0]] = embedd
-        return embedd_dict, embedd_dim
+        return embedd_dict, embedd_dim, True
     elif embedding == 'senna':
         return None
     else:

@@ -135,8 +135,8 @@ def main():
     eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
-    logger.info("Start training: %s with regularization %s (#training data: %d, batch size: %d, clip: %.1f)..." \
-                % (update_algo, regular, num_data, batch_size, grad_clipping))
+    logger.info("Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+                % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
