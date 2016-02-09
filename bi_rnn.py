@@ -7,6 +7,7 @@ from lasagne_nlp.utils import utils
 import lasagne_nlp.utils.data_processor as data_processor
 import theano.tensor as T
 import theano
+import lasagne
 from lasagne_nlp.networks.networks import build_BiRNN
 import lasagne.nonlinearities as nonlinearities
 
@@ -135,12 +136,19 @@ def main():
     eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
-    logger.info("Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
-                % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
+    logger.info(
+        "Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+        % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
-    best_epoch = 0
+    best_acc = 0.0
+    best_epoch_loss = 0
+    best_epoch_acc = 0
+    best_loss_test_err = 0.
+    best_loss_test_corr = 0.
+    best_acc_test_err = 0.
+    best_acc_test_corr = 0.
     stop_count = 0
     lr = learning_rate
     patience = 5
@@ -188,14 +196,22 @@ def main():
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
 
-        if best_loss < dev_err:
+        if best_loss < dev_err and best_acc > dev_corr / dev_total:
             stop_count += 1
         else:
-            best_loss = dev_err
+            update_loss = False
+            update_acc = False
             stop_count = 0
+            if best_loss > dev_err:
+                update_loss = True
+                best_loss = dev_err
+                best_epoch_loss = epoch
+            if best_acc < dev_corr / dev_total:
+                update_acc = True
+                best_acc = dev_corr / dev_total
+                best_epoch_acc = epoch
 
             # evaluate on test data when better performance detected
-            best_epoch = epoch
             test_err = 0.0
             test_corr = 0.0
             test_total = 0
@@ -208,6 +224,13 @@ def main():
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
                 test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 
+            if update_loss:
+                best_loss_test_err = test_err
+                best_loss_test_corr = test_corr
+            if update_acc:
+                best_acc_test_err = test_err
+                best_acc_test_corr = test_corr
+
         # stop if dev acc decrease 3 time straightly.
         if stop_count == patience:
             break
@@ -219,9 +242,12 @@ def main():
                                    updates=updates)
 
     # print best performance on test data.
-    logger.info("final best test performance (at epoch %d)" % (best_epoch))
+    logger.info("final best loss test performance (at epoch %d)" % best_epoch_loss)
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-        test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
+        best_loss_test_err / test_total, best_loss_test_corr, test_total, best_loss_test_corr * 100 / test_total)
+    logger.info("final best acc test performance (at epoch %d)" % best_epoch_acc)
+    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+        best_acc_test_err / test_total, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
 
 if __name__ == '__main__':
