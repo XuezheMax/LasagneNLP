@@ -7,12 +7,13 @@ from lasagne_nlp.utils import utils
 import lasagne_nlp.utils.data_processor as data_processor
 import theano.tensor as T
 import theano
-from lasagne_nlp.networks.networks import build_BiRNN
+import lasagne
+from lasagne_nlp.networks.networks import build_BiLSTM
 import lasagne.nonlinearities as nonlinearities
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN')
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
                         required=True)
@@ -21,6 +22,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
+    parser.add_argument('--peepholes', type=bool, default=False, help='Peepholes for LSTM')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
@@ -44,7 +46,7 @@ def main():
                                                     name='input')
             return layer_input
 
-    logger = utils.get_logger("BiRNN")
+    logger = utils.get_logger("BiLSTM")
     fine_tune = args.fine_tune
     oov = args.oov
     regular = args.regular
@@ -55,6 +57,7 @@ def main():
     test_path = args.test
     update_algo = args.update
     grad_clipping = args.grad_clipping
+    peepholes = args.peepholes
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, num_labels = data_processor.load_dataset_sequence_labeling(train_path, dev_path, test_path, oov=oov,
@@ -77,19 +80,19 @@ def main():
     layer_input = construct_input_layer(input_var, fine_tune, embedd_table, max_length, embedd_dim)
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
-    # construct bi-rnn
+    # construct bi-lstm
     num_units = args.num_units
-    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask, grad_clipping=grad_clipping)
+    bi_lstm = build_BiLSTM(layer_input, num_units, mask=layer_mask, grad_clipping=grad_clipping, peepholes=peepholes)
 
     # reshape bi-rnn to [batch * max_length, embedd_dim]
-    bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
+    bi_lstm = lasagne.layers.reshape(bi_lstm, (-1, [2]))
 
     # drop out layer?
     if regular == 'dropout':
-        bi_rnn = lasagne.layers.DropoutLayer(bi_rnn, p=0.5)
+        bi_lstm = lasagne.layers.DropoutLayer(bi_lstm, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_rnn, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_lstm, num_units=num_labels, nonlinearity=nonlinearities.softmax)
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
