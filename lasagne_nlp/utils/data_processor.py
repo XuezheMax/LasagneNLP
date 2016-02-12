@@ -8,6 +8,7 @@ from lasagne_nlp.utils import utils as utils
 
 root_symbol = "##ROOT##"
 root_label = "<ROOT>"
+word_end = "##WE##"
 MAX_LENGTH = 120
 logger = utils.get_logger("LoadData")
 
@@ -48,7 +49,8 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
 
                     num_tokens += len(words)
                 else:
-                    logger.info("ignore sentence with length %d" % (len(words)))
+                    if len(words) != 0:
+                        logger.info("ignore sentence with length %d" % (len(words)))
 
                 words = []
                 labels = []
@@ -73,9 +75,84 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
     return word_sentences, label_sentences, word_index_sentences, label_index_sentences
 
 
+def generate_character_data(sentences_train, sentences_dev, sentences_test, max_sent_length, char_embedd_dim=30):
+    """
+    generate data for charaters
+    :param sentences_train:
+    :param sentences_dev:
+    :param sentences_test:
+    :param max_sent_length:
+    :return: C_train, C_dev, C_test, char_embedd_table
+    """
+
+    def get_character_indexes(sentences):
+        index_sentences = []
+        max_length = 0
+        for words in sentences:
+            index_words = []
+            for word in words:
+                index_chars = []
+                if len(word) > max_length:
+                    max_length = len(word)
+                for char in word:
+                    char_id = char_alphabet.get_index(char)
+                    index_chars.append(char_id)
+                index_words.append(index_chars)
+            index_sentences.append(index_words)
+        return index_sentences, max_length
+
+    def construct_tensor_char(index_sentences):
+        C = np.empty([len(index_sentences), max_sent_length, max_char_length], dtype=np.int32)
+        word_end_id = char_alphabet.get_index(word_end)
+
+        for i in range(len(index_sentences)):
+            words = index_sentences[i]
+            sent_length = len(words)
+            for j in range(sent_length):
+                chars = words[j]
+                char_length = len(chars)
+                for k in range(char_length):
+                    cid = chars[k]
+                    C[i, j, k] = cid
+                # fill index of word end after the end of word
+                C[i, j, char_length:] = word_end_id
+            # Zero out C after the end of the sentence
+            C[i, sent_length:, :] = 0
+        return C
+
+    def build_char_embedd_table():
+        scale = np.sqrt(3.0 / char_embedd_dim)
+        char_embedd_table = np.random.uniform(-scale, scale, [char_alphabet.size(), char_embedd_dim])
+        return char_embedd_table
+
+    char_alphabet = Alphabet('character')
+    char_alphabet.get_index(word_end)
+
+    index_sentences_train, max_char_length_train = get_character_indexes(sentences_train)
+    index_sentences_dev, max_char_length_dev = get_character_indexes(sentences_dev)
+    index_sentences_test, max_char_length_test = get_character_indexes(sentences_test)
+
+    # close character alphabet
+    char_alphabet.close()
+
+    max_char_length = max(max_char_length_train, max_char_length_dev, max_char_length_test)
+    logger.info("Maximum character length of training set is %d" % max_char_length_train)
+    logger.info("Maximum character length of dev set is %d" % max_char_length_dev)
+    logger.info("Maximum character length of test set is %d" % max_char_length_test)
+    logger.info("Maximum character length used for training is %d" % max_char_length)
+
+    # fill character tensor
+    C_train = construct_tensor_char(index_sentences_train)
+    C_dev = construct_tensor_char(index_sentences_dev)
+    C_test = construct_tensor_char(index_sentences_test)
+
+    return C_train, C_dev, C_test, build_char_embedd_table()
+
+
 def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=1, label_column=4,
                                    label_name='pos', oov='embedding', fine_tune=False, embedding="word2Vec",
-                                   embedding_path="data/word2vec/GoogleNews-vectors-negative300.bin"):
+                                   embedding_path="data/word2vec/GoogleNews-vectors-negative300.bin",
+                                   use_character=False):
     """
     load data from file
     :param train_path: path of training file
@@ -89,19 +166,20 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
     :param fine_tune: if fine tune word embeddings.
     :param embedding: embeddings for words, choose from ['word2vec', 'senna'].
     :param embedding_path: path of file storing word embeddings.
+    :param use_character: if use character embeddings.
     :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test,
-            embedd_table (if fine tune), label_size
+            embedd_table (if fine tune), label_alphabet, C_train, C_dev, C_test, char_embedd_table
     """
 
     def get_max_length(word_sentences):
-        max_length = 0
+        max_len = 0
         for sentence in word_sentences:
             length = len(sentence)
-            if length > max_length:
-                max_length = length
-        return max_length
+            if length > max_len:
+                max_len = length
+        return max_len
 
-    def construct_tensor_fine_tune(word_index_sentences, label_index_sentences, max_length):
+    def construct_tensor_fine_tune(word_index_sentences, label_index_sentences):
         X = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
         Y = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
         mask = np.zeros([len(word_index_sentences), max_length], dtype=theano.config.floatX)
@@ -124,7 +202,7 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
             mask[i, :length] = 1
         return X, Y, mask
 
-    def build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless):
+    def build_embedd_table(embedd_dict, embedd_dim, caseless):
         scale = np.sqrt(3.0 / embedd_dim)
         embedd_table = np.empty([word_alphabet.size(), embedd_dim], dtype=theano.config.floatX)
         embedd_table[word_alphabet.default_index, :] = np.random.uniform(-scale, scale, [1, embedd_dim])
@@ -134,47 +212,27 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
             embedd_table[index, :] = embedd
         return embedd_table
 
-    def generate_dataset_fine_tune(word_index_sentences_train, label_index_sentences_train,
-                                   word_index_sentences_dev, label_index_sentences_dev,
-                                   word_index_sentences_test, label_index_sentences_test,
-                                   word_alphabet, embedding, embedding_path):
+    def generate_dataset_fine_tune():
         """
         generate data tensor when fine tuning
-        :param word_index_sentences_train: word index in training data
-        :param label_index_sentences_train: training target label indexes
-        :param word_index_sentences_dev: word index in dev data
-        :param label_index_sentences_dev: dev target label indexes
-        :param word_index_sentences_test: word index in test data
-        :param label_index_sentences_test: test target label indexes
-        :param word_alphabet: alphabet of words
-        :param embedding: embedding: embeddings for words, choose from ['word2vec', 'senna'].
-        :param embedding_path: embedding_path: path of file storing word embeddings.
         :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, embedd_table, label_size
         """
-
-        # get maximum length
-        max_length_train = get_max_length(word_sentences_train)
-        max_length_dev = get_max_length(word_sentences_dev)
-        max_length_test = get_max_length(word_sentences_test)
-        max_length = min(MAX_LENGTH, max(max_length_train, max_length_dev, max_length_test))
-        logger.info("Maximum length of training set is %d" % (max_length_train))
-        logger.info("Maximum length of dev set is %d" % (max_length_dev))
-        logger.info("Maximum length of test set is %d" % (max_length_test))
-        logger.info("Maximum length used for training is %d" % (max_length))
 
         embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
         logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
         # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
-        X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
-                                                                  label_index_sentences_train, max_length)
-        X_dev, Y_dev, mask_dev = construct_tensor_fine_tune(word_index_sentences_dev, label_index_sentences_dev,
-                                                            max_length)
-        X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test,
-                                                               label_index_sentences_test, max_length)
+        X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train, label_index_sentences_train)
+        X_dev, Y_dev, mask_dev = construct_tensor_fine_tune(word_index_sentences_dev, label_index_sentences_dev)
+        X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test, label_index_sentences_test)
+        C_train, C_dev, C_test, char_embedd_table = generate_character_data(word_sentences_train, word_sentences_dev,
+                                                                            word_sentences_test,
+                                                                            max_length) if use_character else (
+                                                                            None, None, None, None)
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-               build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless), label_alphabet.size() - 1
+               build_embedd_table(embedd_dict, embedd_dim, caseless), label_alphabet, \
+                C_train, C_dev, C_test, char_embedd_table
 
-    def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict, max_length,
+    def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict,
                                        embedd_dim, caseless):
         X = np.empty([len(word_sentences), max_length, embedd_dim], dtype=theano.config.floatX)
         Y = np.empty([len(word_sentences), max_length], dtype=np.int32)
@@ -214,31 +272,11 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
 
         return X, Y, mask
 
-    def generate_dataset_not_fine_tune(word_sentences_train, label_index_sentences_train, word_sentences_dev,
-                                       label_index_sentences_dev, word_sentences_test, label_index_sentences_test,
-                                       embedding, embedding_path):
+    def generate_dataset_not_fine_tune():
         """
         generate data tensor when not fine tuning
-        :param word_sentences_train: training data
-        :param label_index_sentences_train: training target label indexes
-        :param word_sentences_dev: dev data
-        :param label_index_sentences_dev: dev target label indexes
-        :param word_sentences_test: test data
-        :param label_index_sentences_test: test target label indexes
-        :param embedding: embeddings for words, choose from ['word2vec', 'senna'].
-        :param embedding_path: path of file storing word embeddings.
         :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, None, label_size
         """
-
-        # get maximum length
-        max_length_train = get_max_length(word_sentences_train)
-        max_length_dev = get_max_length(word_sentences_dev)
-        max_length_test = get_max_length(word_sentences_test)
-        max_length = min(MAX_LENGTH, max(max_length_train, max_length_dev, max_length_test))
-        logger.info("Maximum length of training set is %d" % (max_length_train))
-        logger.info("Maximum length of dev set is %d" % (max_length_dev))
-        logger.info("Maximum length of test set is %d" % (max_length_test))
-        logger.info("Maximum length used for training is %d" % (max_length))
 
         embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
         logger.info("Dimension of embedding is %d, Caseless: %s" % (embedd_dim, caseless))
@@ -247,15 +285,18 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         unknown_embedd = np.random.uniform(-0.01, 0.01, [1, embedd_dim])
         X_train, Y_train, mask_train = construct_tensor_not_fine_tune(word_sentences_train,
                                                                       label_index_sentences_train, unknown_embedd,
-                                                                      embedd_dict, max_length, embedd_dim, caseless)
+                                                                      embedd_dict, embedd_dim, caseless)
         X_dev, Y_dev, mask_dev = construct_tensor_not_fine_tune(word_sentences_dev, label_index_sentences_dev,
-                                                                unknown_embedd, embedd_dict, max_length, embedd_dim,
-                                                                caseless)
+                                                                unknown_embedd, embedd_dict, embedd_dim, caseless)
         X_test, Y_test, mask_test = construct_tensor_not_fine_tune(word_sentences_test, label_index_sentences_test,
-                                                                   unknown_embedd, embedd_dict, max_length, embedd_dim,
-                                                                   caseless)
+                                                                   unknown_embedd, embedd_dict, embedd_dim, caseless)
+        C_train, C_dev, C_test, char_embedd_table = generate_character_data(word_sentences_train, word_sentences_dev,
+                                                                            word_sentences_test,
+                                                                            max_length) if use_character else (
+                                                                            None, None, None, None)
+
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-               None, label_alphabet.size() - 1
+               None, label_alphabet, C_train, C_dev, C_test, char_embedd_table
 
     word_alphabet = Alphabet('word')
     label_alphabet = Alphabet(label_name)
@@ -280,18 +321,26 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
     word_sentences_test, _, word_index_sentences_test, label_index_sentences_test = read_conll_sequence_labeling(
         test_path, word_alphabet, label_alphabet, word_column, label_column)
 
+    # close alphabets
+    word_alphabet.close()
+    label_alphabet.close()
+
     logger.info("word alphabet size: %d" % (word_alphabet.size() - 1))
     logger.info("label alphabet size: %d" % (label_alphabet.size() - 1))
 
+    # get maximum length
+    max_length_train = get_max_length(word_sentences_train)
+    max_length_dev = get_max_length(word_sentences_dev)
+    max_length_test = get_max_length(word_sentences_test)
+    max_length = min(MAX_LENGTH, max(max_length_train, max_length_dev, max_length_test))
+    logger.info("Maximum length of training set is %d" % max_length_train)
+    logger.info("Maximum length of dev set is %d" % max_length_dev)
+    logger.info("Maximum length of test set is %d" % max_length_test)
+    logger.info("Maximum length used for training is %d" % max_length)
+
     if fine_tune:
         logger.info("Generating data with fine tuning...")
-        return generate_dataset_fine_tune(word_index_sentences_train, label_index_sentences_train,
-                                          word_index_sentences_dev, label_index_sentences_dev,
-                                          word_index_sentences_test, label_index_sentences_test,
-                                          word_alphabet, embedding, embedding_path)
+        return generate_dataset_fine_tune()
     else:
         logger.info("Generating data without fine tuning...")
-        return generate_dataset_not_fine_tune(word_sentences_train, label_index_sentences_train,
-                                              word_sentences_dev, label_index_sentences_dev,
-                                              word_sentences_test, label_index_sentences_test,
-                                              embedding, embedding_path)
+        return generate_dataset_not_fine_tune()

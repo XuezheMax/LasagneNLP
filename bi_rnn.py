@@ -58,9 +58,12 @@ def main():
     grad_clipping = args.grad_clipping
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-    embedd_table, num_labels = data_processor.load_dataset_sequence_labeling(train_path, dev_path, test_path, oov=oov,
-                                                                             fine_tune=fine_tune, embedding=embedding,
-                                                                             embedding_path=embedding_path)
+    embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
+                                                                                              test_path, oov=oov,
+                                                                                              fine_tune=fine_tune,
+                                                                                              embedding=embedding,
+                                                                                              embedding_path=embedding_path)
+    num_labels = label_alphabet.size() - 1
 
     logger.info("constructing network...")
     # create variables
