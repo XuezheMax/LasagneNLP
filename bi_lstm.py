@@ -81,6 +81,10 @@ def main():
 
     # construct input and mask layers
     layer_input = construct_input_layer(input_var, fine_tune, embedd_table, max_length, embedd_dim)
+    # dropout input layer?
+    if regular == 'dropout':
+        layer_input = lasagne.layers.DropoutLayer(layer_input, p=0.5)
+
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
     # construct bi-lstm
@@ -90,7 +94,7 @@ def main():
     # reshape bi-rnn to [batch * max_length, embedd_dim]
     bi_lstm = lasagne.layers.reshape(bi_lstm, (-1, [2]))
 
-    # drop out layer?
+    # dropout output layer?
     if regular == 'dropout':
         bi_lstm = lasagne.layers.DropoutLayer(bi_lstm, p=0.5)
 
