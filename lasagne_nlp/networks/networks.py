@@ -67,3 +67,54 @@ def build_BiLSTM(incoming, num_units, mask=None, grad_clipping=0, precompute_inp
 
     # the shape of BiRNN output (concat) is (batch_size, input_length, 2 * num_hidden_units)
     return concat
+
+
+def build_BiRNN_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0, nonlinearity=nonlinearities.tanh,
+                    precompute_input=True, num_filters=20, dropout=True):
+    # first get some necessary dimensions or parameters
+    conv_window = 3
+    _, sent_length, _ = incoming2.output_shape
+
+    # construct convolution layer
+    cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
+                                           nonlinearity=lasagne.nonlinearities.tanh)
+    # infer the pool size for pooling (pool size should go through all time step of cnn)
+    _, _, pool_size = cnn_layer.output_shape
+    # construct max pool layer
+    pool_layer = lasagne.layers.MaxPool1DLayer(cnn_layer, pool_size=pool_size)
+    # reshape the layer to match rnn incoming layer [batch * sent_length, num_filters, 1] --> [batch, sent_length, num_filters]
+    output_cnn_layer = lasagne.layers.reshape(pool_layer, (-1, sent_length, [1]))
+    # dropout?
+    if dropout:
+        output_cnn_layer = lasagne.layers.DropoutLayer(output_cnn_layer, p=0.5)
+    # finally, concatenate the two incoming layers together.
+    incoming = lasagne.layers.concat([output_cnn_layer, incoming2], axis=2)
+
+    return build_BiRNN(incoming, num_units, mask=mask, grad_clipping=grad_clipping, nonlinearity=nonlinearity,
+                       precompute_input=precompute_input)
+
+
+def build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0, precompute_input=True,
+                     peepholes=False, num_filters=20, dropout=True):
+    # first get some necessary dimensions or parameters
+    conv_window = 3
+    _, sent_length, _ = incoming2.output_shape
+
+    # construct convolution layer
+    cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
+                                           nonlinearity=lasagne.nonlinearities.tanh)
+    # infer the pool size for pooling (pool size should go through all time step of cnn)
+    _, _, pool_size = cnn_layer.output_shape
+    # construct max pool layer
+    pool_layer = lasagne.layers.MaxPool1DLayer(cnn_layer, pool_size=pool_size)
+    # construct output layer of cnn
+    # reshape the layer to match lstm incoming layer [batch * sent_length, num_filters, 1] --> [batch, sent_length, num_filters]
+    output_cnn_layer = lasagne.layers.reshape(pool_layer, (-1, sent_length, [1]))
+    # dropout?
+    if dropout:
+        output_cnn_layer = lasagne.layers.DropoutLayer(output_cnn_layer, p=0.5)
+    # finally, concatenate the two incoming layers together.
+    incoming = lasagne.layers.concat([output_cnn_layer, incoming2], axis=2)
+
+    return build_BiLSTM(incoming, num_units, mask=mask, grad_clipping=grad_clipping, peepholes=peepholes,
+                        precompute_input=precompute_input)

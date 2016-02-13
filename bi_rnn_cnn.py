@@ -8,21 +8,21 @@ import lasagne_nlp.utils.data_processor as data_processor
 import theano.tensor as T
 import theano
 import lasagne
-from lasagne_nlp.networks.networks import build_BiLSTM
+from lasagne_nlp.networks.networks import build_BiRNN_CNN
 import lasagne.nonlinearities as nonlinearities
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM')
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional RNN')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
                         required=True)
     parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
                         help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
-    parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in LSTM')
+    parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
+    parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in CNN')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
-    parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
@@ -45,7 +45,17 @@ def main():
                                                     name='input')
             return layer_input
 
-    logger = utils.get_logger("BiLSTM")
+    def construct_char_input_layer():
+        layer_char_input = lasagne.layers.InputLayer(shape=(None, max_sent_length, max_char_length),
+                                                     input_var=char_input_var, name='char-input')
+        layer_char_input = lasagne.layers.reshape(layer_char_input, (-1, [2]))
+        layer_char_embedding = lasagne.layers.EmbeddingLayer(layer_char_input, input_size=char_alphabet_size,
+                                                             output_size=char_embedd_dim, W=char_embedd_table,
+                                                             name='char_embedding')
+        layer_char_input = lasagne.layers.DimshuffleLayer(layer_char_embedding, pattern=(0, 2, 1))
+        return layer_char_input
+
+    logger = utils.get_logger("BiRNN-CNN")
     fine_tune = args.fine_tune
     oov = args.oov
     regular = args.regular
@@ -56,14 +66,16 @@ def main():
     test_path = args.test
     update_algo = args.update
     grad_clipping = args.grad_clipping
-    peepholes = args.peepholes
+    num_filters = args.num_filters
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-    embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
+    embedd_table, label_alphabet, \
+    C_train, C_dev, C_test, char_embedd_table = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
                                                                                               test_path, oov=oov,
                                                                                               fine_tune=fine_tune,
                                                                                               embedding=embedding,
-                                                                                              embedding_path=embedding_path)
+                                                                                              embedding_path=embedding_path,
+                                                                                              use_character=True)
     num_labels = label_alphabet.size() - 1
 
     logger.info("constructing network...")
@@ -77,28 +89,36 @@ def main():
     else:
         input_var = T.tensor3(name='inputs', dtype=theano.config.floatX)
         num_data, max_length, embedd_dim = X_train.shape
+    char_input_var = T.itensor3(name='char-inputs')
+    num_data_char, max_sent_length, max_char_length = C_train.shape
+    char_alphabet_size, char_embedd_dim = char_embedd_table.shape
+    assert (max_length == max_sent_length)
+    assert (num_data == num_data_char)
 
     # construct input and mask layers
-    layer_incoming = construct_input_layer()
+    layer_incoming1 = construct_char_input_layer()
+    layer_incoming2 = construct_input_layer()
     # dropout input layer?
     if regular == 'dropout':
-        layer_incoming = lasagne.layers.DropoutLayer(layer_incoming, p=0.5)
+        layer_incoming1 = lasagne.layers.DropoutLayer(layer_incoming1, p=0.5)
+        layer_incoming2 = lasagne.layers.DropoutLayer(layer_incoming2, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
-    # construct bi-lstm
+    # construct bi-rnn-cnn
     num_units = args.num_units
-    bi_lstm = build_BiLSTM(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping, peepholes=peepholes)
+    bi_rnn_cnn = build_BiRNN_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
+                                 grad_clipping=grad_clipping, num_filters=num_filters, dropout=(regular == 'dropout'))
 
-    # reshape bi-rnn to [batch * max_length, embedd_dim]
-    bi_lstm = lasagne.layers.reshape(bi_lstm, (-1, [2]))
+    # reshape bi-rnn-cnn to [batch * max_length, embedd_dim]
+    bi_rnn_cnn = lasagne.layers.reshape(bi_rnn_cnn, (-1, [2]))
 
     # dropout output layer?
     if regular == 'dropout':
-        bi_lstm = lasagne.layers.DropoutLayer(bi_lstm, p=0.5)
+        bi_rnn_cnn = lasagne.layers.DropoutLayer(bi_rnn_cnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_lstm, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_rnn_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax)
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
@@ -139,14 +159,15 @@ def main():
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
     # Compile a function performing a training step on a mini-batch
-    train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss], updates=updates)
+    train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_loss],
+                               updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
-    eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
+    eval_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_eval, corr_eval, num_loss])
 
     # Finally, launch the training loop.
     logger.info(
-        "Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
-        % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping, peepholes))
+        "Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+        % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -168,9 +189,10 @@ def main():
         start_time = time.time()
         num_back = 0
         train_batches = 0
-        for batch in utils.iterate_minibatches(X_train, Y_train, masks=mask_train, batch_size=batch_size, shuffle=True):
-            inputs, targets, masks, _ = batch
-            err, corr, num = train_fn(inputs, targets, masks)
+        for batch in utils.iterate_minibatches(X_train, Y_train, masks=mask_train, char_inputs=C_train,
+                                               batch_size=batch_size, shuffle=True):
+            inputs, targets, masks, char_inputs = batch
+            err, corr, num = train_fn(inputs, targets, masks, char_inputs)
             train_err += err * num
             train_corr += corr
             train_total += num
@@ -195,9 +217,9 @@ def main():
         dev_err = 0.0
         dev_corr = 0.0
         dev_total = 0
-        for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, batch_size=batch_size):
-            inputs, targets, masks, _ = batch
-            err, corr, num = eval_fn(inputs, targets, masks)
+        for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, char_inputs=C_dev, batch_size=batch_size):
+            inputs, targets, masks, char_inputs = batch
+            err, corr, num = eval_fn(inputs, targets, masks, char_inputs)
             dev_err += err * num
             dev_corr += corr
             dev_total += num
@@ -223,9 +245,9 @@ def main():
             test_err = 0.0
             test_corr = 0.0
             test_total = 0
-            for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, batch_size=batch_size):
-                inputs, targets, masks, _ = batch
-                err, corr, num = eval_fn(inputs, targets, masks)
+            for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, char_inputs=C_test, batch_size=batch_size):
+                inputs, targets, masks, char_inputs = batch
+                err, corr, num = eval_fn(inputs, targets, masks, char_inputs)
                 test_err += err * num
                 test_corr += corr
                 test_total += num
@@ -250,10 +272,10 @@ def main():
                                    updates=updates)
 
     # print best performance on test data.
-    logger.info("final best loss test performance (at epoch %d)" % (best_epoch_loss))
+    logger.info("final best loss test performance (at epoch %d)" % best_epoch_loss)
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         best_loss_test_err / test_total, best_loss_test_corr, test_total, best_loss_test_corr * 100 / test_total)
-    logger.info("final best acc test performance (at epoch %d)" % (best_epoch_acc))
+    logger.info("final best acc test performance (at epoch %d)" % best_epoch_acc)
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         best_acc_test_err / test_total, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 

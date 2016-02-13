@@ -51,7 +51,7 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 if embedd_dim < 0:
                     embedd_dim = len(tokens) - 1
                 else:
-                    assert(embedd_dim + 1 == len(tokens))
+                    assert (embedd_dim + 1 == len(tokens))
                 embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
                 embedd[:] = tokens[1:]
                 embedd_dict[tokens[0]] = embedd
@@ -60,6 +60,7 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
         return None
     else:
         raise ValueError("embedding should choose from [word2vec, senna]")
+
 
 # ############################# Batch iterator ###############################
 # This is just a simple helper function iterating over training data in
@@ -70,31 +71,23 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
 # them to GPU at once for slightly improved performance. This would involve
 # several changes in the main program, though, and is not demonstrated here.
 
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
+
+def iterate_minibatches(inputs, targets, masks=None, char_inputs=None, batch_size=10, shuffle=False):
     assert len(inputs) == len(targets)
+    if masks is not None:
+        assert len(inputs) == len(masks)
+    if char_inputs is not None:
+        assert len(inputs) == len(char_inputs)
     if shuffle:
         indices = np.arange(len(inputs))
         np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs), batchsize):
+    for start_idx in range(0, len(inputs), batch_size):
         if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
+            excerpt = indices[start_idx:start_idx + batch_size]
         else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
-
-
-def iterate_minibatches(inputs, targets, masks, batchsize, shuffle=False):
-    assert len(inputs) == len(targets)
-    assert len(inputs) == len(masks)
-    if shuffle:
-        indices = np.arange(len(inputs))
-        np.random.shuffle(indices)
-    for start_idx in range(0, len(inputs), batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt], masks[excerpt]
+            excerpt = slice(start_idx, start_idx + batch_size)
+        yield inputs[excerpt], targets[excerpt], (None if masks is None else masks[excerpt]), \
+              (None if char_inputs is None else char_inputs[excerpt])
 
 
 def create_updates(loss, params, update_algo, learning_rate, momentum=None):

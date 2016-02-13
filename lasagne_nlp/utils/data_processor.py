@@ -122,7 +122,8 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
 
     def build_char_embedd_table():
         scale = np.sqrt(3.0 / char_embedd_dim)
-        char_embedd_table = np.random.uniform(-scale, scale, [char_alphabet.size(), char_embedd_dim])
+        char_embedd_table = np.random.uniform(-scale, scale, [char_alphabet.size(), char_embedd_dim]).astype(
+            theano.config.floatX)
         return char_embedd_table
 
     char_alphabet = Alphabet('character')
@@ -221,16 +222,17 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
         logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
         # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
-        X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train, label_index_sentences_train)
+        X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
+                                                                  label_index_sentences_train)
         X_dev, Y_dev, mask_dev = construct_tensor_fine_tune(word_index_sentences_dev, label_index_sentences_dev)
         X_test, Y_test, mask_test = construct_tensor_fine_tune(word_index_sentences_test, label_index_sentences_test)
         C_train, C_dev, C_test, char_embedd_table = generate_character_data(word_sentences_train, word_sentences_dev,
                                                                             word_sentences_test,
                                                                             max_length) if use_character else (
-                                                                            None, None, None, None)
+            None, None, None, None)
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
                build_embedd_table(embedd_dict, embedd_dim, caseless), label_alphabet, \
-                C_train, C_dev, C_test, char_embedd_table
+               C_train, C_dev, C_test, char_embedd_table
 
     def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict,
                                        embedd_dim, caseless):
@@ -293,7 +295,7 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         C_train, C_dev, C_test, char_embedd_table = generate_character_data(word_sentences_train, word_sentences_dev,
                                                                             word_sentences_test,
                                                                             max_length) if use_character else (
-                                                                            None, None, None, None)
+            None, None, None, None)
 
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
                None, label_alphabet, C_train, C_dev, C_test, char_embedd_table

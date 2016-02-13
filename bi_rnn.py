@@ -32,9 +32,8 @@ def main():
 
     args = parser.parse_args()
 
-    def construct_input_layer(input_var, fine_tune, embedd_table, max_length, embedd_dim):
+    def construct_input_layer():
         if fine_tune:
-            alphabet_size, _ = embedd_table.shape
             layer_input = lasagne.layers.InputLayer(shape=(None, max_length), input_var=input_var, name='input')
             layer_embedding = lasagne.layers.EmbeddingLayer(layer_input, input_size=alphabet_size,
                                                             output_size=embedd_dim,
@@ -72,22 +71,22 @@ def main():
     if fine_tune:
         input_var = T.imatrix(name='inputs')
         num_data, max_length = X_train.shape
-        _, embedd_dim = embedd_table.shape
+        alphabet_size, embedd_dim = embedd_table.shape
     else:
         input_var = T.tensor3(name='inputs', dtype=theano.config.floatX)
         num_data, max_length, embedd_dim = X_train.shape
 
     # construct input and mask layers
-    layer_input = construct_input_layer(input_var, fine_tune, embedd_table, max_length, embedd_dim)
+    layer_incoming = construct_input_layer()
     # dropout input layer?
     if regular == 'dropout':
-        layer_input = lasagne.layers.DropoutLayer(layer_input, p=0.5)
+        layer_incoming = lasagne.layers.DropoutLayer(layer_incoming, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
     # construct bi-rnn
     num_units = args.num_units
-    bi_rnn = build_BiRNN(layer_input, num_units, mask=layer_mask, grad_clipping=grad_clipping)
+    bi_rnn = build_BiRNN(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping)
 
     # reshape bi-rnn to [batch * max_length, embedd_dim]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
@@ -167,8 +166,8 @@ def main():
         start_time = time.time()
         num_back = 0
         train_batches = 0
-        for batch in utils.iterate_minibatches(X_train, Y_train, mask_train, batch_size, shuffle=True):
-            inputs, targets, masks = batch
+        for batch in utils.iterate_minibatches(X_train, Y_train, masks=mask_train, batch_size=batch_size, shuffle=True):
+            inputs, targets, masks, _ = batch
             err, corr, num = train_fn(inputs, targets, masks)
             train_err += err * num
             train_corr += corr
@@ -194,8 +193,8 @@ def main():
         dev_err = 0.0
         dev_corr = 0.0
         dev_total = 0
-        for batch in utils.iterate_minibatches(X_dev, Y_dev, mask_dev, batch_size):
-            inputs, targets, masks = batch
+        for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, batch_size=batch_size):
+            inputs, targets, masks, _ = batch
             err, corr, num = eval_fn(inputs, targets, masks)
             dev_err += err * num
             dev_corr += corr
@@ -222,8 +221,8 @@ def main():
             test_err = 0.0
             test_corr = 0.0
             test_total = 0
-            for batch in utils.iterate_minibatches(X_test, Y_test, mask_test, batch_size):
-                inputs, targets, masks = batch
+            for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, batch_size=batch_size):
+                inputs, targets, masks, _ = batch
                 err, corr, num = eval_fn(inputs, targets, masks)
                 test_err += err * num
                 test_corr += corr
