@@ -57,7 +57,25 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 embedd_dict[tokens[0]] = embedd
         return embedd_dict, embedd_dim, True
     elif embedding == 'senna':
-        return None
+        # laoding Senna
+        logger.info("Loading Senna ...")
+        embedd_dim = -1
+        embedd_dict = dict()
+        with gzip.open(embedding_path, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if len(line) == 0:
+                    continue
+
+                tokens = line.split()
+                if embedd_dim < 0:
+                    embedd_dim = len(tokens) - 1
+                else:
+                    assert(embedd_dim + 1 == len(tokens))
+                embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
+                embedd[:] = tokens[1:]
+                embedd_dict[tokens[0]] = embedd
+        return embedd_dict, embedd_dim, True
     else:
         raise ValueError("embedding should choose from [word2vec, senna]")
 
