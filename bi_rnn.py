@@ -79,8 +79,8 @@ def main():
     # construct input and mask layers
     layer_incoming = construct_input_layer()
     # dropout input layer?
-    if regular == 'dropout':
-        layer_incoming = lasagne.layers.DropoutLayer(layer_incoming, p=0.5)
+    # if regular == 'dropout':
+    #     layer_incoming = lasagne.layers.DropoutLayer(layer_incoming, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 

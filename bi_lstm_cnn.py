@@ -101,9 +101,9 @@ def main():
     layer_incoming1 = construct_char_input_layer()
     layer_incoming2 = construct_input_layer()
     # dropout input layer?
-    if regular == 'dropout':
-        layer_incoming1 = lasagne.layers.DropoutLayer(layer_incoming1, p=0.5)
-        layer_incoming2 = lasagne.layers.DropoutLayer(layer_incoming2, p=0.5)
+    # if regular == 'dropout':
+    #     layer_incoming1 = lasagne.layers.DropoutLayer(layer_incoming1, p=0.5)
+    #     layer_incoming2 = lasagne.layers.DropoutLayer(layer_incoming2, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
