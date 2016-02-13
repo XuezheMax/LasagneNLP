@@ -10,6 +10,7 @@ root_symbol = "##ROOT##"
 root_label = "<ROOT>"
 word_end = "##WE##"
 MAX_LENGTH = 120
+MAX_CHAR_LENGTH = 30
 logger = utils.get_logger("LoadData")
 
 
@@ -94,9 +95,11 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
                 index_chars = []
                 if len(word) > max_length:
                     max_length = len(word)
-                for char in word:
+
+                for char in word[:MAX_CHAR_LENGTH]:
                     char_id = char_alphabet.get_index(char)
                     index_chars.append(char_id)
+
                 index_words.append(index_chars)
             index_sentences.append(index_words)
         return index_sentences, max_length
@@ -136,7 +139,7 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
     # close character alphabet
     char_alphabet.close()
 
-    max_char_length = max(max_char_length_train, max_char_length_dev, max_char_length_test)
+    max_char_length = min(MAX_CHAR_LENGTH, max(max_char_length_train, max_char_length_dev, max_char_length_test))
     logger.info("Maximum character length of training set is %d" % max_char_length_train)
     logger.info("Maximum character length of dev set is %d" % max_char_length_dev)
     logger.info("Maximum character length of test set is %d" % max_char_length_test)
