@@ -107,7 +107,6 @@ def build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0
     _, _, pool_size = cnn_layer.output_shape
     # construct max pool layer
     pool_layer = lasagne.layers.MaxPool1DLayer(cnn_layer, pool_size=pool_size)
-    # construct output layer of cnn
     # reshape the layer to match lstm incoming layer [batch * sent_length, num_filters, 1] --> [batch, sent_length, num_filters]
     output_cnn_layer = lasagne.layers.reshape(pool_layer, (-1, sent_length, [1]))
     # dropout?
