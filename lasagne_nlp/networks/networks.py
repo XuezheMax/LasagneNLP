@@ -12,13 +12,13 @@ def build_BiRNN(incoming, num_units, mask=None, grad_clipping=0, nonlinearity=no
     rnn_forward = lasagne.layers.RecurrentLayer(incoming, num_units,
                                                 mask_input=mask, grad_clipping=grad_clipping,
                                                 nonlinearity=nonlinearity, precompute_input=precompute_input,
-                                                W_in_to_hid=lasagne.init.HeUniform(),
-                                                W_hid_to_hid=lasagne.init.HeUniform(), name='forward')
+                                                W_in_to_hid=lasagne.init.GlorotUniform(),
+                                                W_hid_to_hid=lasagne.init.GlorotUniform(), name='forward')
     rnn_backward = lasagne.layers.RecurrentLayer(incoming, num_units,
                                                  mask_input=mask, grad_clipping=grad_clipping,
                                                  nonlinearity=nonlinearity, precompute_input=precompute_input,
-                                                 W_in_to_hid=lasagne.init.HeUniform(),
-                                                 W_hid_to_hid=lasagne.init.HeUniform(), backwards=True, name='backward')
+                                                 W_in_to_hid=lasagne.init.GlorotUniform(),
+                                                 W_hid_to_hid=lasagne.init.GlorotUniform(), backwards=True, name='backward')
 
     # concatenate the outputs of forward and backward RNNs to combine them.
     concat = lasagne.layers.concat([rnn_forward, rnn_backward], axis=2, name="bi-rnn")
