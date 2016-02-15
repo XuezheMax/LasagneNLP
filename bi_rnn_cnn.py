@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in CNN')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
+    parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
@@ -67,6 +68,7 @@ def main():
     update_algo = args.update
     grad_clipping = args.grad_clipping
     num_filters = args.num_filters
+    gamma = args.gamma
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, \
@@ -135,7 +137,6 @@ def main():
     loss_train = (loss_train * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
     # l2 regularization?
     if regular == 'l2':
-        gamma = 1e-6
         l2_penalty = lasagne.regularization.regularize_network_params(layer_output, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
 
@@ -166,8 +167,8 @@ def main():
 
     # Finally, launch the training loop.
     logger.info(
-        "Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
-        % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
+        "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12

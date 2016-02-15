@@ -13,12 +13,12 @@ def build_BiRNN(incoming, num_units, mask=None, grad_clipping=0, nonlinearity=no
                                                 mask_input=mask, grad_clipping=grad_clipping,
                                                 nonlinearity=nonlinearity, precompute_input=precompute_input,
                                                 W_in_to_hid=lasagne.init.HeUniform(),
-                                                W_hid_to_hid=lasagne.init.HeUniform())
+                                                W_hid_to_hid=lasagne.init.HeUniform(), name='forward')
     rnn_backward = lasagne.layers.RecurrentLayer(incoming, num_units,
                                                  mask_input=mask, grad_clipping=grad_clipping,
                                                  nonlinearity=nonlinearity, precompute_input=precompute_input,
                                                  W_in_to_hid=lasagne.init.HeUniform(),
-                                                 W_hid_to_hid=lasagne.init.HeUniform(), backwards=True)
+                                                 W_hid_to_hid=lasagne.init.HeUniform(), backwards=True, name='backward')
 
     # concatenate the outputs of forward and backward RNNs to combine them.
     concat = lasagne.layers.concat([rnn_forward, rnn_backward], axis=2, name="bi-rnn")
@@ -44,7 +44,7 @@ def build_BiLSTM(incoming, num_units, mask=None, grad_clipping=0, precompute_inp
                                             nonlinearity=nonlinearities.tanh, peepholes=peepholes,
                                             precompute_input=precompute_input,
                                             ingate=ingate_forward, outgate=outgate_forward,
-                                            forgetgate=forgetgate_forward, cell=cell_forward)
+                                            forgetgate=forgetgate_forward, cell=cell_forward, name='forward')
 
     ingate_backward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
                            W_cell=lasagne.init.GlorotUniform())
@@ -60,7 +60,7 @@ def build_BiLSTM(incoming, num_units, mask=None, grad_clipping=0, precompute_inp
                                              nonlinearity=nonlinearities.tanh, peepholes=peepholes,
                                              precompute_input=precompute_input, backwards=True,
                                              ingate=ingate_backward, outgate=outgate_backward,
-                                             forgetgate=forgetgate_backward, cell=cell_backward)
+                                             forgetgate=forgetgate_backward, cell=cell_backward, name='backward')
 
     # concatenate the outputs of forward and backward RNNs to combine them.
     concat = lasagne.layers.concat([lstm_forward, lstm_backward], axis=2, name="bi-lstm")
@@ -77,7 +77,7 @@ def build_BiRNN_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0,
 
     # construct convolution layer
     cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
-                                           nonlinearity=lasagne.nonlinearities.tanh)
+                                           nonlinearity=lasagne.nonlinearities.tanh, name='cnn')
     # infer the pool size for pooling (pool size should go through all time step of cnn)
     _, _, pool_size = cnn_layer.output_shape
     # construct max pool layer
@@ -102,7 +102,7 @@ def build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0
 
     # construct convolution layer
     cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
-                                           nonlinearity=lasagne.nonlinearities.tanh)
+                                           nonlinearity=lasagne.nonlinearities.tanh, name='cnn')
     # infer the pool size for pooling (pool size should go through all time step of cnn)
     _, _, pool_size = cnn_layer.output_shape
     # construct max pool layer

@@ -4,6 +4,7 @@ import time
 import sys
 import argparse
 from lasagne_nlp.utils import utils
+from lasagne_nlp.utils.regularization import dima
 import lasagne_nlp.utils.data_processor as data_processor
 import theano.tensor as T
 import theano
@@ -22,9 +23,10 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
+    parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
-    parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
+    parser.add_argument('--regular', choices=['none', 'l2', 'dropout', 'dima'], help='regularization for training',
                         required=True)
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
@@ -55,13 +57,14 @@ def main():
     test_path = args.test
     update_algo = args.update
     grad_clipping = args.grad_clipping
+    gamma = args.gamma
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
-                                                                                              test_path, oov=oov,
-                                                                                              fine_tune=fine_tune,
-                                                                                              embedding=embedding,
-                                                                                              embedding_path=embedding_path)
+                                                                                             test_path, oov=oov,
+                                                                                             fine_tune=fine_tune,
+                                                                                             embedding=embedding,
+                                                                                             embedding_path=embedding_path)
     num_labels = label_alphabet.size() - 1
 
     logger.info("constructing network...")
@@ -96,7 +99,8 @@ def main():
         bi_rnn = lasagne.layers.DropoutLayer(bi_rnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_rnn, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_rnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,
+                                             name='softmax')
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
@@ -111,11 +115,17 @@ def main():
     # for training, we use mean of loss over number of labels
     loss_train = lasagne.objectives.categorical_crossentropy(prediction_train, target_var_flatten)
     loss_train = (loss_train * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
+    ############################################
     # l2 regularization?
     if regular == 'l2':
-        gamma = 1e-6
         l2_penalty = lasagne.regularization.regularize_network_params(layer_output, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
+    # dima regularization?
+    if regular == 'dima':
+        params_regular = utils.get_all_params_by_name(layer_output, name=['forward.hidden_to_hidden.W',
+                                                                          'backward.hidden_to_hidden.W'])
+        dima_penalty = lasagne.regularization.apply_penalty(params_regular, dima)
+        loss_train = loss_train + gamma * dima_penalty
 
     loss_eval = lasagne.objectives.categorical_crossentropy(prediction_eval, target_var_flatten)
     loss_eval = (loss_eval * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
@@ -143,8 +153,8 @@ def main():
 
     # Finally, launch the training loop.
     logger.info(
-        "Start training: %s with regularization: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
-        % (update_algo, regular, fine_tune, num_data, batch_size, grad_clipping))
+        "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12

@@ -71,7 +71,7 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 if embedd_dim < 0:
                     embedd_dim = len(tokens) - 1
                 else:
-                    assert(embedd_dim + 1 == len(tokens))
+                    assert (embedd_dim + 1 == len(tokens))
                 embedd = np.empty([1, embedd_dim], dtype=theano.config.floatX)
                 embedd[:] = tokens[1:]
                 embedd_dict[tokens[0]] = embedd
@@ -127,3 +127,14 @@ def create_updates(loss, params, update_algo, learning_rate, momentum=None):
         return lasagne.updates.nesterov_momentum(loss, params=params, learning_rate=learning_rate, momentum=momentum)
     else:
         raise ValueError('unkown update algorithm: %s' % update_algo)
+
+
+def get_all_params_by_name(layer, name=None, **tags):
+    tags['trainable'] = tags.get('trainable', True)
+    tags['regularizable'] = tags.get('regularizable', True)
+    params = lasagne.layers.get_all_params(layer, **tags)
+    if name is None:
+        return params
+    else:
+        name_set = set(name) if isinstance(name, list) else set([name, ])
+        return [param for param in params if param.name in name_set]
