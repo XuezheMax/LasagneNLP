@@ -62,10 +62,10 @@ def main():
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
-                                                                                              test_path, oov=oov,
-                                                                                              fine_tune=fine_tune,
-                                                                                              embedding=embedding,
-                                                                                              embedding_path=embedding_path)
+                                                                                             test_path, oov=oov,
+                                                                                             fine_tune=fine_tune,
+                                                                                             embedding=embedding,
+                                                                                             embedding_path=embedding_path)
     num_labels = label_alphabet.size() - 1
 
     logger.info("constructing network...")
@@ -100,7 +100,8 @@ def main():
         bi_lstm = lasagne.layers.DropoutLayer(bi_lstm, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_lstm, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_lstm, num_units=num_labels, nonlinearity=nonlinearities.softmax,
+                                             name='softmax')
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
@@ -147,7 +148,8 @@ def main():
     # Finally, launch the training loop.
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
-        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping, peepholes))
+        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12

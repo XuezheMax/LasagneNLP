@@ -120,7 +120,8 @@ def main():
         bi_rnn_cnn = lasagne.layers.DropoutLayer(bi_rnn_cnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_rnn_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_rnn_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,
+                                             name='softmax')
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
@@ -246,7 +247,8 @@ def main():
             test_err = 0.0
             test_corr = 0.0
             test_total = 0
-            for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, char_inputs=C_test, batch_size=batch_size):
+            for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, char_inputs=C_test,
+                                                   batch_size=batch_size):
                 inputs, targets, masks, char_inputs = batch
                 err, corr, num = eval_fn(inputs, targets, masks, char_inputs)
                 test_err += err * num
@@ -269,7 +271,8 @@ def main():
         # re-compile a function with new learning rate for training
         lr = learning_rate / (1.0 + epoch * decay_rate)
         updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
-        train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_loss],
+        train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
+                                   [loss_train, corr_train, num_loss],
                                    updates=updates)
 
     # print best performance on test data.

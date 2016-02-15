@@ -112,8 +112,8 @@ def main():
     # construct bi-rnn-cnn
     num_units = args.num_units
     bi_lstm_cnn = build_BiLSTM_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
-                                  grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
-                                  dropout=(regular == 'dropout'))
+                                   grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
+                                   dropout=(regular == 'dropout'))
 
     # reshape bi-rnn-cnn to [batch * max_length, embedd_dim]
     bi_lstm_cnn = lasagne.layers.reshape(bi_lstm_cnn, (-1, [2]))
@@ -123,7 +123,8 @@ def main():
         bi_lstm_cnn = lasagne.layers.DropoutLayer(bi_lstm_cnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_lstm_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax)
+    layer_output = lasagne.layers.DenseLayer(bi_lstm_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,
+                                             name='softmax')
 
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
@@ -171,7 +172,8 @@ def main():
     # Finally, launch the training loop.
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
-        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping, peepholes))
+        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -273,7 +275,8 @@ def main():
         # re-compile a function with new learning rate for training
         lr = learning_rate / (1.0 + epoch * decay_rate)
         updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
-        train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_loss],
+        train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
+                                   [loss_train, corr_train, num_loss],
                                    updates=updates)
 
     # print best performance on test data.
