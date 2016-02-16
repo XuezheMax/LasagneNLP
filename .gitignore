@@ -73,6 +73,9 @@ target/
 # log dir
 /log/
 
+# tmp dir
+/tmp/
+
 # IDE 
 /.idea/
 *.iml

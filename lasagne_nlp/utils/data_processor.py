@@ -138,6 +138,7 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
 
     # close character alphabet
     char_alphabet.close()
+    logger.info("character alphabet size: %d" % (char_alphabet.size() - 1))
 
     max_char_length = min(MAX_CHAR_LENGTH, max(max_char_length_train, max_char_length_dev, max_char_length_test))
     logger.info("Maximum character length of training set is %d" % max_char_length_train)
