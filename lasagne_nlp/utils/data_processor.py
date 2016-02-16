@@ -9,7 +9,7 @@ from lasagne_nlp.utils import utils as utils
 root_symbol = "##ROOT##"
 root_label = "<ROOT>"
 word_end = "##WE##"
-MAX_LENGTH = 120
+MAX_LENGTH = 125
 MAX_CHAR_LENGTH = 30
 logger = utils.get_logger("LoadData")
 
@@ -71,6 +71,18 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
 
                 word_ids.append(word_id)
                 label_ids.append(label_id)
+
+    if 0 < len(words) <= MAX_LENGTH:
+        word_sentences.append(words[:])
+        label_sentences.append(labels[:])
+
+        word_index_sentences.append(word_ids[:])
+        label_index_sentences.append(label_ids[:])
+
+        num_tokens += len(words)
+    else:
+        if len(words) != 0:
+            logger.info("ignore sentence with length %d" % (len(words)))
 
     logger.info("#sentences: %d, #tokens: %d" % (len(word_sentences), num_tokens))
     return word_sentences, label_sentences, word_index_sentences, label_index_sentences

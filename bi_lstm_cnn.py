@@ -29,6 +29,7 @@ def main():
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
+    parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -71,6 +72,7 @@ def main():
     peepholes = args.peepholes
     num_filters = args.num_filters
     gamma = args.gamma
+    output_predict = args.output_prediction
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, \
@@ -115,7 +117,7 @@ def main():
                                    grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
                                    dropout=(regular == 'dropout'))
 
-    # reshape bi-rnn-cnn to [batch * max_length, embedd_dim]
+    # reshape bi-rnn-cnn to [batch * max_length, num_units]
     bi_lstm_cnn = lasagne.layers.reshape(bi_lstm_cnn, (-1, [2]))
 
     # dropout output layer?
@@ -129,6 +131,8 @@ def main():
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
     prediction_eval = lasagne.layers.get_output(layer_output, deterministic=True)
+    final_prediction = T.argmax(prediction_eval, axis=1)
+
     # flat target_var to vector
     target_var_flatten = target_var.flatten()
     # flat mask_var to vector
@@ -167,13 +171,15 @@ def main():
     train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_loss],
                                updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
-    eval_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_eval, corr_eval, num_loss])
+    eval_fn = theano.function([input_var, target_var, mask_var, char_input_var],
+                              [loss_eval, corr_eval, num_loss, final_prediction])
 
     # Finally, launch the training loop.
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
-        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
-            peepholes))
+        % (
+        update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+        peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -225,10 +231,13 @@ def main():
         dev_total = 0
         for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, char_inputs=C_dev, batch_size=batch_size):
             inputs, targets, masks, char_inputs = batch
-            err, corr, num = eval_fn(inputs, targets, masks, char_inputs)
+            err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
             dev_err += err * num
             dev_corr += corr
             dev_total += num
+            if output_predict:
+                utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, label_alphabet)
+
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
 
@@ -254,10 +263,13 @@ def main():
             for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, char_inputs=C_test,
                                                    batch_size=batch_size):
                 inputs, targets, masks, char_inputs = batch
-                err, corr, num = eval_fn(inputs, targets, masks, char_inputs)
+                err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
                 test_err += err * num
                 test_corr += corr
                 test_total += num
+                if output_predict:
+                    utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, label_alphabet)
+
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
                 test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 

@@ -26,8 +26,9 @@ def main():
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
-    parser.add_argument('--regular', choices=['none', 'l2', 'dropout', 'dima'], help='regularization for training',
+    parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
+    parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
     parser.add_argument('--test')  # "data/POS-penn/wsj/split1/wsj1.test.original"
@@ -58,6 +59,7 @@ def main():
     update_algo = args.update
     grad_clipping = args.grad_clipping
     gamma = args.gamma
+    output_predict = args.output_prediction
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
@@ -91,7 +93,7 @@ def main():
     num_units = args.num_units
     bi_rnn = build_BiRNN(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping)
 
-    # reshape bi-rnn to [batch * max_length, embedd_dim]
+    # reshape bi-rnn to [batch * max_length, num_units]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
 
     # dropout output layer?
@@ -105,6 +107,8 @@ def main():
     # get output of bi-rnn shape=[batch * max_length, #label]
     prediction_train = lasagne.layers.get_output(layer_output)
     prediction_eval = lasagne.layers.get_output(layer_output, deterministic=True)
+    final_prediction = T.argmax(prediction_eval, axis=1)
+
     # flat target_var to vector
     target_var_flatten = target_var.flatten()
     # flat mask_var to vector
@@ -121,11 +125,11 @@ def main():
         l2_penalty = lasagne.regularization.regularize_network_params(layer_output, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
     # dima regularization?
-    if regular == 'dima':
-        params_regular = utils.get_all_params_by_name(layer_output, name=['forward.hidden_to_hidden.W',
-                                                                          'backward.hidden_to_hidden.W'])
-        dima_penalty = lasagne.regularization.apply_penalty(params_regular, dima)
-        loss_train = loss_train + gamma * dima_penalty
+    # if regular == 'dima':
+    #     params_regular = utils.get_all_params_by_name(layer_output, name=['forward.hidden_to_hidden.W',
+    #                                                                       'backward.hidden_to_hidden.W'])
+    #     dima_penalty = lasagne.regularization.apply_penalty(params_regular, dima)
+    #     loss_train = loss_train + gamma * dima_penalty
 
     loss_eval = lasagne.objectives.categorical_crossentropy(prediction_eval, target_var_flatten)
     loss_eval = (loss_eval * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
@@ -149,7 +153,7 @@ def main():
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var, mask_var], [loss_train, corr_train, num_loss], updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
-    eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss])
+    eval_fn = theano.function([input_var, target_var, mask_var], [loss_eval, corr_eval, num_loss, final_prediction])
 
     # Finally, launch the training loop.
     logger.info(
@@ -205,10 +209,13 @@ def main():
         dev_total = 0
         for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, batch_size=batch_size):
             inputs, targets, masks, _ = batch
-            err, corr, num = eval_fn(inputs, targets, masks)
+            err, corr, num, predictions = eval_fn(inputs, targets, masks)
             dev_err += err * num
             dev_corr += corr
             dev_total += num
+            if output_predict:
+                utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, label_alphabet)
+
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
 
@@ -233,10 +240,13 @@ def main():
             test_total = 0
             for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, batch_size=batch_size):
                 inputs, targets, masks, _ = batch
-                err, corr, num = eval_fn(inputs, targets, masks)
+                err, corr, num, predictions = eval_fn(inputs, targets, masks)
                 test_err += err * num
                 test_corr += corr
                 test_total += num
+                if output_predict:
+                    utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, label_alphabet)
+
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
                 test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
 
