@@ -1,6 +1,5 @@
 __author__ = 'max'
 
-
 import time
 import sys
 import argparse
@@ -160,7 +159,8 @@ def main():
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
         % (
-            update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size,
+            grad_clipping,
             peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
@@ -223,7 +223,8 @@ def main():
             dev_total += num
             dev_inst += inputs.shape[0]
             if output_predict:
-                utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, label_alphabet)
+                utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, label_alphabet,
+                                         is_flattened=False)
 
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_inst, dev_corr, dev_total, dev_corr * 100 / dev_total)
@@ -257,7 +258,8 @@ def main():
                 test_total += num
                 test_inst += inputs.shape[0]
                 if output_predict:
-                    utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, label_alphabet)
+                    utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, label_alphabet,
+                                             is_flattened=False)
 
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
                 test_err / test_inst, test_corr, test_total, test_corr * 100 / test_total)
@@ -288,13 +290,14 @@ def main():
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         best_acc_test_err / test_total, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
+
 def test():
     energies_var = T.tensor4('energies', dtype=theano.config.floatX)
     targets_var = T.imatrix('targets')
     masks_var = T.matrix('masks', dtype=theano.config.floatX)
     layer_input = lasagne.layers.InputLayer([2, 2, 3, 3], input_var=energies_var)
     out = lasagne.layers.get_output(layer_input)
-    loss = crf_loss(out,targets_var, masks_var)
+    loss = crf_loss(out, targets_var, masks_var)
     prediction, acc = crf_accuracy(energies_var, targets_var)
 
     fn = theano.function([energies_var, targets_var, masks_var], [loss, prediction, acc])
@@ -310,6 +313,7 @@ def test():
     print l
     print p
     print a
+
 
 if __name__ == '__main__':
     main()

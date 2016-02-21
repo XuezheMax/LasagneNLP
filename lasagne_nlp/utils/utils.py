@@ -140,12 +140,13 @@ def get_all_params_by_name(layer, name=None, **tags):
         return [param for param in params if param.name in name_set]
 
 
-def output_predictions(predictions, targets, masks, filename, label_alphabet):
+def output_predictions(predictions, targets, masks, filename, label_alphabet, is_flattened=True):
     batch_size, max_length = targets.shape
     with open(filename, 'a') as file:
         for i in range(batch_size):
             for j in range(max_length):
                 if masks[i, j] > 0.:
+                    prediction = predictions[i * max_length + j] + 1 if is_flattened else predictions[i, j] + 1
                     file.write('_ %s %s\n' % (label_alphabet.get_instance(targets[i, j] + 1),
-                                            label_alphabet.get_instance(predictions[i * max_length + j] + 1)))
+                                              label_alphabet.get_instance(prediction)))
             file.write('\n')
