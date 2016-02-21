@@ -1,19 +1,22 @@
 __author__ = 'max'
 
+
 import time
 import sys
 import argparse
 from lasagne_nlp.utils import utils
 import lasagne_nlp.utils.data_processor as data_processor
-import theano.tensor as T
-import theano
+from lasagne_nlp.utils.objectives import crf_loss, crf_accuracy
 import lasagne
-from lasagne_nlp.networks.networks import build_BiLSTM_CNN
-import lasagne.nonlinearities as nonlinearities
+import theano
+import theano.tensor as T
+from lasagne_nlp.networks.networks import build_BiLSTM_CNN_CRF
+
+import numpy as np
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-CNN')
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-CNN-CRF')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
                         required=True)
@@ -58,7 +61,7 @@ def main():
         layer_char_input = lasagne.layers.DimshuffleLayer(layer_char_embedding, pattern=(0, 2, 1))
         return layer_char_input
 
-    logger = utils.get_logger("BiLSTM-CNN")
+    logger = utils.get_logger("BiLSTM-CNN-CRF")
     fine_tune = args.fine_tune
     oov = args.oov
     regular = args.regular
@@ -113,50 +116,29 @@ def main():
 
     # construct bi-rnn-cnn
     num_units = args.num_units
-    bi_lstm_cnn = build_BiLSTM_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
-                                   grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
-                                   dropout=(regular == 'dropout'))
 
-    # reshape bi-rnn-cnn to [batch * max_length, num_units]
-    bi_lstm_cnn = lasagne.layers.reshape(bi_lstm_cnn, (-1, [2]))
-
-    # dropout output layer?
-    if regular == 'dropout':
-        bi_lstm_cnn = lasagne.layers.DropoutLayer(bi_lstm_cnn, p=0.5)
-
-    # construct output layer (dense layer with softmax)
-    layer_output = lasagne.layers.DenseLayer(bi_lstm_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,
-                                             name='softmax')
-
-    # get output of bi-lstm-cnn shape=[batch * max_length, #label]
-    prediction_train = lasagne.layers.get_output(layer_output)
-    prediction_eval = lasagne.layers.get_output(layer_output, deterministic=True)
-    final_prediction = T.argmax(prediction_eval, axis=1)
-
-    # flat target_var to vector
-    target_var_flatten = target_var.flatten()
-    # flat mask_var to vector
-    mask_var_flatten = mask_var.flatten()
+    bi_lstm_cnn_crf = build_BiLSTM_CNN_CRF(layer_incoming1, layer_incoming2, num_units, num_labels, mask=layer_mask,
+                                           grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
+                                           dropout=(regular == 'dropout'))
 
     # compute loss
-    num_loss = mask_var_flatten.sum(dtype=theano.config.floatX)
-    # for training, we use mean of loss over number of labels
-    loss_train = lasagne.objectives.categorical_crossentropy(prediction_train, target_var_flatten)
-    loss_train = (loss_train * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
+    num_tokens = mask_var.sum(dtype=theano.config.floatX)
+
+    # get outpout of bi-lstm-cnn-crf shape [batch, length, num_labels, num_labels]
+    energies_train = lasagne.layers.get_output(bi_lstm_cnn_crf)
+    energies_eval = lasagne.layers.get_output(bi_lstm_cnn_crf, deterministic=True)
+
+    loss_train = crf_loss(energies_train, target_var, mask_var).mean()
+    loss_eval = crf_loss(energies_eval, target_var, mask_var).mean()
     # l2 regularization?
     if regular == 'l2':
-        l2_penalty = lasagne.regularization.regularize_network_params(layer_output, lasagne.regularization.l2)
+        l2_penalty = lasagne.regularization.regularize_network_params(bi_lstm_cnn_crf, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
 
-    loss_eval = lasagne.objectives.categorical_crossentropy(prediction_eval, target_var_flatten)
-    loss_eval = (loss_eval * mask_var_flatten).sum(dtype=theano.config.floatX) / num_loss
-
-    # compute number of correct labels
-    corr_train = lasagne.objectives.categorical_accuracy(prediction_train, target_var_flatten)
-    corr_train = (corr_train * mask_var_flatten).sum(dtype=theano.config.floatX)
-
-    corr_eval = lasagne.objectives.categorical_accuracy(prediction_eval, target_var_flatten)
-    corr_eval = (corr_eval * mask_var_flatten).sum(dtype=theano.config.floatX)
+    _, corr_train = crf_accuracy(energies_train, target_var)
+    corr_train = (corr_train * mask_var).sum(dtype=theano.config.floatX)
+    prediction_eval, corr_eval = crf_accuracy(energies_eval, target_var)
+    corr_eval = (corr_eval * mask_var).sum(dtype=theano.config.floatX)
 
     # Create update expressions for training.
     # hyper parameters to tune: learning rate, momentum, regularization.
@@ -164,22 +146,22 @@ def main():
     learning_rate = 0.1
     decay_rate = 0.1
     momentum = 0.9
-    params = lasagne.layers.get_all_params(layer_output, trainable=True)
+    params = lasagne.layers.get_all_params(bi_lstm_cnn_crf, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
     # Compile a function performing a training step on a mini-batch
-    train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_loss],
+    train_fn = theano.function([input_var, target_var, mask_var, char_input_var], [loss_train, corr_train, num_tokens],
                                updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
     eval_fn = theano.function([input_var, target_var, mask_var, char_input_var],
-                              [loss_eval, corr_eval, num_loss, final_prediction])
+                              [loss_eval, corr_eval, num_tokens, prediction_eval])
 
     # Finally, launch the training loop.
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
         % (
-        update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
-        peepholes))
+            update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -198,6 +180,7 @@ def main():
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
+        train_inst = 0
         start_time = time.time()
         num_back = 0
         train_batches = 0
@@ -205,9 +188,10 @@ def main():
                                                batch_size=batch_size, shuffle=True):
             inputs, targets, masks, char_inputs = batch
             err, corr, num = train_fn(inputs, targets, masks, char_inputs)
-            train_err += err * num
+            train_err += err * inputs.shape[0]
             train_corr += corr
             train_total += num
+            train_inst += inputs.shape[0]
             train_batches += 1
             time_ave = (time.time() - start_time) / train_batches
             time_left = (num_batches - train_batches) * time_ave
@@ -216,30 +200,33 @@ def main():
             sys.stdout.write("\b" * num_back)
             log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
                 min(train_batches * batch_size, num_data), num_data,
-                train_err / train_total, train_corr * 100 / train_total, time_left)
+                train_err / train_inst, train_corr * 100 / train_total, time_left)
             sys.stdout.write(log_info)
             num_back = len(log_info)
         # update training log after each epoch
+        assert train_inst == num_data
         sys.stdout.write("\b" * num_back)
         print 'train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
             min(train_batches * batch_size, num_data), num_data,
-            train_err / train_total, train_corr * 100 / train_total, time.time() - start_time)
+            train_err / num_data, train_corr * 100 / train_total, time.time() - start_time)
 
         # evaluate performance on dev data
         dev_err = 0.0
         dev_corr = 0.0
         dev_total = 0
+        dev_inst = 0
         for batch in utils.iterate_minibatches(X_dev, Y_dev, masks=mask_dev, char_inputs=C_dev, batch_size=batch_size):
             inputs, targets, masks, char_inputs = batch
             err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
-            dev_err += err * num
+            dev_err += err * inputs.shape[0]
             dev_corr += corr
             dev_total += num
+            dev_inst += inputs.shape[0]
             if output_predict:
                 utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, label_alphabet)
 
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-            dev_err / dev_total, dev_corr, dev_total, dev_corr * 100 / dev_total)
+            dev_err / dev_inst, dev_corr, dev_total, dev_corr * 100 / dev_total)
 
         if best_loss < dev_err and best_acc > dev_corr / dev_total:
             stop_count += 1
@@ -260,18 +247,20 @@ def main():
             test_err = 0.0
             test_corr = 0.0
             test_total = 0
+            test_inst = 0
             for batch in utils.iterate_minibatches(X_test, Y_test, masks=mask_test, char_inputs=C_test,
                                                    batch_size=batch_size):
                 inputs, targets, masks, char_inputs = batch
                 err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
-                test_err += err * num
+                test_err += err * inputs.shape[0]
                 test_corr += corr
                 test_total += num
+                test_inst += inputs.shape[0]
                 if output_predict:
                     utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, label_alphabet)
 
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-                test_err / test_total, test_corr, test_total, test_corr * 100 / test_total)
+                test_err / test_inst, test_corr, test_total, test_corr * 100 / test_total)
 
             if update_loss:
                 best_loss_test_err = test_err
@@ -288,7 +277,7 @@ def main():
         lr = learning_rate / (1.0 + epoch * decay_rate)
         updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
         train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
-                                   [loss_train, corr_train, num_loss],
+                                   [loss_train, corr_train, num_tokens],
                                    updates=updates)
 
     # print best performance on test data.
@@ -299,6 +288,28 @@ def main():
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         best_acc_test_err / test_total, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
+def test():
+    energies_var = T.tensor4('energies', dtype=theano.config.floatX)
+    targets_var = T.imatrix('targets')
+    masks_var = T.matrix('masks', dtype=theano.config.floatX)
+    layer_input = lasagne.layers.InputLayer([2, 2, 3, 3], input_var=energies_var)
+    out = lasagne.layers.get_output(layer_input)
+    loss = crf_loss(out,targets_var, masks_var)
+    prediction, acc = crf_accuracy(energies_var, targets_var)
+
+    fn = theano.function([energies_var, targets_var, masks_var], [loss, prediction, acc])
+
+    energies = np.array([[[[10, 15, 20], [5, 10, 15], [3, 2, 0]], [[5, 10, 1], [5, 10, 1], [5, 10, 1]]],
+                         [[[5, 6, 7], [2, 3, 4], [2, 1, 0]], [[0, 0, 0], [0, 0, 0], [0, 0, 0]]]], dtype=np.float32)
+
+    targets = np.array([[0, 1], [0, 2]], dtype=np.int32)
+
+    masks = np.array([[1, 1], [1, 0]], dtype=np.float32)
+
+    l, p, a = fn(energies, targets, masks)
+    print l
+    print p
+    print a
 
 if __name__ == '__main__':
     main()

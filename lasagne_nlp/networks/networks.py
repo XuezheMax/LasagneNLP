@@ -3,6 +3,7 @@ __author__ = 'max'
 import lasagne
 import lasagne.nonlinearities as nonlinearities
 from lasagne.layers import Gate
+from lasagne_nlp.networks.crf import CRFLayer
 
 
 def build_BiRNN(incoming, num_units, mask=None, grad_clipping=0, nonlinearity=nonlinearities.tanh,
@@ -117,3 +118,15 @@ def build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0
 
     return build_BiLSTM(incoming, num_units, mask=mask, grad_clipping=grad_clipping, peepholes=peepholes,
                         precompute_input=precompute_input)
+
+
+def build_BiLSTM_CNN_CRF(incoming1, incoming2, num_units, num_labels, mask=None, grad_clipping=0, precompute_input=True,
+                        peepholes=False, num_filters=20, dropout=True):
+    bi_lstm_cnn = build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=mask, grad_clipping=grad_clipping,
+                                   precompute_input=precompute_input, peepholes=peepholes,
+                                   num_filters=num_filters, dropout=dropout)
+    if dropout:
+        bi_lstm_cnn = lasagne.layers.DropoutLayer(bi_lstm_cnn, p=0.5)
+
+    return CRFLayer(bi_lstm_cnn, num_labels, mask_input=mask)
+
