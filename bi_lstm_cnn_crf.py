@@ -22,8 +22,9 @@ def main():
     parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
                         help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
-    parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
-    parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in LSTM')
+    parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in LSTM')
+    parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in CNN')
+    parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
@@ -142,7 +143,7 @@ def main():
     # Create update expressions for training.
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = args.batch_size
-    learning_rate = 0.1
+    learning_rate = args.learning_rate
     decay_rate = 0.1
     momentum = 0.9
     params = lasagne.layers.get_all_params(bi_lstm_cnn_crf, trainable=True)
