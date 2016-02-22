@@ -177,7 +177,7 @@ def main():
     lr = learning_rate
     patience = 5
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f): ' % (epoch, lr)
+        print 'Epoch %d (learning rate=%.6f): ' % (epoch, lr)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
