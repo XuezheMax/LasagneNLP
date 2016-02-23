@@ -44,7 +44,11 @@ class Alphabet:
         if index == 0:
             # First index is occupied by the wildcard element.
             return None
-        return self.instances[index - 1]
+        try:
+            return self.instances[index - 1]
+        except IndexError:
+            self.logger.warn('unknown instance, return the first label.')
+            return self.instances[0]
 
     def size(self):
         return len(self.instances) + 1
