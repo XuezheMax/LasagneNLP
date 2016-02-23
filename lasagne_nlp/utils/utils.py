@@ -125,6 +125,8 @@ def create_updates(loss, params, update_algo, learning_rate, momentum=None):
         return lasagne.updates.momentum(loss, params=params, learning_rate=learning_rate, momentum=momentum)
     elif update_algo == 'nesterov':
         return lasagne.updates.nesterov_momentum(loss, params=params, learning_rate=learning_rate, momentum=momentum)
+    elif update_algo == 'adadelta':
+        return lasagne.updates.adadelta(loss, params=params)
     else:
         raise ValueError('unkown update algorithm: %s' % update_algo)
 
