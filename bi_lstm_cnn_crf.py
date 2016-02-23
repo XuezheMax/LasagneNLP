@@ -144,7 +144,7 @@ def main():
     # Create update expressions for training.
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = args.batch_size
-    learning_rate = args.learning_rate
+    learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     decay_rate = 0.1
     momentum = 0.9
     params = lasagne.layers.get_all_params(bi_lstm_cnn_crf, trainable=True)
@@ -278,11 +278,12 @@ def main():
             break
 
         # re-compile a function with new learning rate for training
-        lr = learning_rate / (1.0 + epoch * decay_rate)
-        updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
-        train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
-                                   [loss_train, corr_train, num_tokens],
-                                   updates=updates)
+        if update_algo != 'adadelta':
+            lr = learning_rate / (1.0 + epoch * decay_rate)
+            updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
+            train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
+                                        [loss_train, corr_train, num_tokens],
+                                        updates=updates)
 
     # print best performance on test data.
     logger.info("final best loss test performance (at epoch %d)" % best_epoch_loss)
