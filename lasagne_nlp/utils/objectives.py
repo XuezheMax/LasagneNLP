@@ -131,9 +131,13 @@ def crf_accuracy(energies, targets):
     # but scan requires the iterable dimension to be first
     # So, we need to dimshuffle to (n_time_steps, n_batch, num_labels, num_labels)
     energies_shuffled = energies.dimshuffle(1, 0, 2, 3)
+    # pi at time 0 is the last rwo at time 0. but we need to remove the last column which is the pad symbol.
+    pi_time0 = energies_shuffled[0, :, -1, :-1]
 
-    energy_time0 = energies_shuffled[0]
-    pi_time0 = energy_time0[:, -1]
+    # the last row and column is the tag for pad symbol. reduce these two dimensions by 1 to remove that.
+    # now the shape of energies_shuffled is [n_time_steps, b_batch, t, t] where t = num_labels - 1.
+    energies_shuffled = energies_shuffled[:, :, :-1, :-1]
+
     initials = [pi_time0, T.cast(T.fill(pi_time0, -1), 'int64')]
 
     [pis, pointers], _ = theano.scan(fn=inner_function, outputs_info=initials, sequences=[energies_shuffled[1:]])
