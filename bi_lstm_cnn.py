@@ -105,10 +105,6 @@ def main():
     # construct input and mask layers
     layer_incoming1 = construct_char_input_layer()
     layer_incoming2 = construct_input_layer()
-    # dropout input layer?
-    if regular == 'dropout':
-        # layer_incoming1 = lasagne.layers.DropoutLayer(layer_incoming1, p=0.5)
-        layer_incoming2 = lasagne.layers.DropoutLayer(layer_incoming2, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
@@ -120,10 +116,6 @@ def main():
 
     # reshape bi-rnn-cnn to [batch * max_length, num_units]
     bi_lstm_cnn = lasagne.layers.reshape(bi_lstm_cnn, (-1, [2]))
-
-    # dropout output layer?
-    if regular == 'dropout':
-        bi_lstm_cnn = lasagne.layers.DropoutLayer(bi_lstm_cnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
     layer_output = lasagne.layers.DenseLayer(bi_lstm_cnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,

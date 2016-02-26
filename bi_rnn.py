@@ -83,22 +83,16 @@ def main():
 
     # construct input and mask layers
     layer_incoming = construct_input_layer()
-    # dropout input layer?
-    # if regular == 'dropout':
-    #     layer_incoming = lasagne.layers.DropoutLayer(layer_incoming, p=0.5)
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
     # construct bi-rnn
     num_units = args.num_units
-    bi_rnn = build_BiRNN(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping)
+    bi_rnn = build_BiRNN(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping,
+                         dropout=(regular == 'dropout'))
 
     # reshape bi-rnn to [batch * max_length, num_units]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
-
-    # dropout output layer?
-    if regular == 'dropout':
-        bi_rnn = lasagne.layers.DropoutLayer(bi_rnn, p=0.5)
 
     # construct output layer (dense layer with softmax)
     layer_output = lasagne.layers.DenseLayer(bi_rnn, num_units=num_labels, nonlinearity=nonlinearities.softmax,
@@ -158,7 +152,8 @@ def main():
     # Finally, launch the training loop.
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
-        % (update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping))
+        % (
+        update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
