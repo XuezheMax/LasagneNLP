@@ -122,8 +122,8 @@ def build_BiLSTM_CNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0
     _, sent_length, _ = incoming2.output_shape
 
     # dropout before cnn?
-    if dropout:
-        incoming1 = lasagne.layers.DropoutLayer(incoming1, p=0.5)
+    # if dropout:
+    #     incoming1 = lasagne.layers.DropoutLayer(incoming1, p=0.5)
 
     # construct convolution layer
     cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
