@@ -141,7 +141,7 @@ def main():
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = args.batch_size
     learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    decay_rate = 0.05
+    decay_rate = 0.1
     momentum = 0.9
     params = lasagne.layers.get_all_params(bi_lstm_cnn_crf, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
