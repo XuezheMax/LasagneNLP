@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in LSTM')
     parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in CNN')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
+    parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
@@ -117,6 +118,7 @@ def main():
     bi_lstm_cnn_crf = build_BiLSTM_CNN_CRF(layer_incoming1, layer_incoming2, num_units, num_labels, mask=layer_mask,
                                            grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
                                            dropout=(regular == 'dropout'))
+    logger.info("Network structure: hidden=%d, filter=%d" % (num_units, num_filters))
 
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -141,7 +143,7 @@ def main():
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = args.batch_size
     learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    decay_rate = 0.1
+    decay_rate = args.decay_rate
     momentum = 0.9
     params = lasagne.layers.get_all_params(bi_lstm_cnn_crf, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
@@ -174,7 +176,7 @@ def main():
     lr = learning_rate
     patience = 5
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.6f): ' % (epoch, lr)
+        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
