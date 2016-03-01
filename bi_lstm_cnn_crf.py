@@ -17,10 +17,9 @@ import numpy as np
 def main():
     parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-CNN-CRF')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
-    parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
+    parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna', 'random'], help='Embedding for words',
                         required=True)
-    parser.add_argument('--embedding_dict', default='data/word2vec/GoogleNews-vectors-negative300.bin',
-                        help='path for embedding dict')
+    parser.add_argument('--embedding_dict', default=None, help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in LSTM')
     parser.add_argument('--num_filters', type=int, default=20, help='Number of filters in CNN')

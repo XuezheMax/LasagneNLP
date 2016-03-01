@@ -168,7 +168,7 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
 
 def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=1, label_column=4,
                                    label_name='pos', oov='embedding', fine_tune=False, embedding="word2Vec",
-                                   embedding_path="data/word2vec/GoogleNews-vectors-negative300.bin",
+                                   embedding_path=None,
                                    use_character=False):
     """
     load data from file
@@ -235,7 +235,8 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, embedd_table, label_size
         """
 
-        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, word_alphabet,
+                                                                           logger)
         logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
         # fill data tensor (X.shape = [#data, max_length], Y.shape = [#data, max_length])
         X_train, Y_train, mask_train = construct_tensor_fine_tune(word_index_sentences_train,
@@ -296,7 +297,8 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, None, label_size
         """
 
-        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, logger)
+        embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, word_alphabet,
+                                                                           logger)
         logger.info("Dimension of embedding is %d, Caseless: %s" % (embedd_dim, caseless))
 
         # fill data tensor (X.shape = [#data, max_length, embedding_dim], Y.shape = [#data, max_length])

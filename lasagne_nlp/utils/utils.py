@@ -22,7 +22,7 @@ def get_logger(name, level=logging.INFO, handler=sys.stdout,
     return logger
 
 
-def load_word_embedding_dict(embedding, embedding_path, logger):
+def load_word_embedding_dict(embedding, embedding_path, word_alphabet, logger, embedd_dim=100):
     """
     load word embeddings from file
     :param embedding:
@@ -57,7 +57,7 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 embedd_dict[tokens[0]] = embedd
         return embedd_dict, embedd_dim, True
     elif embedding == 'senna':
-        # laoding Senna
+        # loading Senna
         logger.info("Loading Senna ...")
         embedd_dim = -1
         embedd_dict = dict()
@@ -76,6 +76,15 @@ def load_word_embedding_dict(embedding, embedding_path, logger):
                 embedd[:] = tokens[1:]
                 embedd_dict[tokens[0]] = embedd
         return embedd_dict, embedd_dim, True
+    elif embedding == 'random':
+        # loading random embedding table
+        logger.info("Loading Random ...")
+        embedd_dict = dict()
+        words = word_alphabet.get_content
+        scale = np.sqrt(3.0 / embedd_dim)
+        for word in words:
+            embedd_dict[word] = np.random.uniform(-scale, scale, [1, embedd_dim])
+        return embedd_dict, embedd_dim, False
     else:
         raise ValueError("embedding should choose from [word2vec, senna]")
 
