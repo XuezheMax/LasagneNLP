@@ -80,7 +80,7 @@ def load_word_embedding_dict(embedding, embedding_path, word_alphabet, logger, e
         # loading random embedding table
         logger.info("Loading Random ...")
         embedd_dict = dict()
-        words = word_alphabet.get_content
+        words = word_alphabet.get_content()
         scale = np.sqrt(3.0 / embedd_dim)
         for word in words:
             embedd_dict[word] = np.random.uniform(-scale, scale, [1, embedd_dim])
