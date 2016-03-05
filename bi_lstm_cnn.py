@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov', 'adadelta'], help='update algorithm', default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
                         required=True)
+    parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
@@ -185,7 +186,7 @@ def main():
     best_acc_test_corr = 0.
     stop_count = 0
     lr = learning_rate
-    patience = 5
+    patience = args.patience
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=%.4f): ' % (epoch, lr)
         train_err = 0.0
