@@ -1,6 +1,5 @@
 __author__ = 'max'
 
-import numpy as np
 import theano.tensor as T
 
 from lasagne import init

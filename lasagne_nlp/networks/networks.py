@@ -4,6 +4,7 @@ import lasagne
 import lasagne.nonlinearities as nonlinearities
 from lasagne.layers import Gate
 from lasagne_nlp.networks.crf import CRFLayer
+from lasagne_nlp.networks.highway import HighwayDenseLayer
 
 
 def build_BiRNN(incoming, num_units, mask=None, grad_clipping=0, nonlinearity=nonlinearities.tanh,
@@ -150,3 +151,34 @@ def build_BiLSTM_CNN_CRF(incoming1, incoming2, num_units, num_labels, mask=None,
 
     return CRFLayer(bi_lstm_cnn, num_labels, mask_input=mask)
 
+
+def build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=None, grad_clipping=0, precompute_input=True,
+                         peepholes=False, num_filters=20, dropout=True):
+    # first get some necessary dimensions or parameters
+    conv_window = 3
+    _, sent_length, _ = incoming2.output_shape
+
+    # dropout before cnn?
+    if dropout:
+        incoming1 = lasagne.layers.DropoutLayer(incoming1, p=0.5)
+
+    # construct convolution layer
+    cnn_layer = lasagne.layers.Conv1DLayer(incoming1, num_filters=num_filters, filter_size=conv_window, pad='full',
+                                           nonlinearity=lasagne.nonlinearities.tanh, name='cnn')
+    # infer the pool size for pooling (pool size should go through all time step of cnn)
+    _, _, pool_size = cnn_layer.output_shape
+    # construct max pool layer
+    pool_layer = lasagne.layers.MaxPool1DLayer(cnn_layer, pool_size=pool_size)
+    # reshape the layer to match highway incoming layer [batch * sent_length, num_filters, 1] --> [batch * sent_length, num_filters]
+    output_cnn_layer = lasagne.layers.reshape(pool_layer, ([0], -1))
+    # construct highway layer
+    highway_layer = HighwayDenseLayer(output_cnn_layer, nonlinearity=nonlinearities.rectify)
+
+    # reshape the layer to match lstm incoming layer [batch * sent_length, num_filters] --> [batch, sent_length, number_filters]
+    output_highway_layer = lasagne.layers.reshape(highway_layer, (-1, sent_length, [1]))
+
+    # finally, concatenate the two incoming layers together.
+    incoming = lasagne.layers.concat([output_highway_layer, incoming2], axis=2)
+
+    return build_BiLSTM(incoming, num_units, mask=mask, grad_clipping=grad_clipping, peepholes=peepholes,
+                        precompute_input=precompute_input, dropout=dropout)

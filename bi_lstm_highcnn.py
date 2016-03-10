@@ -8,12 +8,12 @@ import lasagne_nlp.utils.data_processor as data_processor
 import theano.tensor as T
 import theano
 import lasagne
-from lasagne_nlp.networks.networks import build_BiLSTM_CNN
+from lasagne_nlp.networks.networks import build_BiLSTM_HighCNN
 import lasagne.nonlinearities as nonlinearities
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-CNN')
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-HighCNN')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna'], help='Embedding for words',
                         required=True)
@@ -61,7 +61,7 @@ def main():
         layer_char_input = lasagne.layers.DimshuffleLayer(layer_char_embedding, pattern=(0, 2, 1))
         return layer_char_input
 
-    logger = utils.get_logger("BiLSTM-CNN")
+    logger = utils.get_logger("BiLSTM-HighCNN")
     fine_tune = args.fine_tune
     oov = args.oov
     regular = args.regular
@@ -112,7 +112,7 @@ def main():
 
     # construct bi-rnn-cnn
     num_units = args.num_units
-    bi_lstm_cnn = build_BiLSTM_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
+    bi_lstm_cnn = build_BiLSTM_HighCNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
                                    grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
                                    dropout=(regular == 'dropout'))
 
@@ -173,8 +173,8 @@ def main():
     logger.info(
         "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
         % (
-        update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
-        peepholes))
+            update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -284,8 +284,8 @@ def main():
             lr = learning_rate / (1.0 + epoch * decay_rate)
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
             train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
-                                        [loss_train, corr_train, num_loss],
-                                        updates=updates)
+                                       [loss_train, corr_train, num_loss],
+                                       updates=updates)
 
     # print best performance on test data.
     logger.info("final best loss test performance (at epoch %d)" % best_epoch_loss)
