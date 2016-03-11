@@ -9,13 +9,13 @@ from lasagne_nlp.utils.objectives import crf_loss, crf_accuracy
 import lasagne
 import theano
 import theano.tensor as T
-from lasagne_nlp.networks.networks import build_BiLSTM_CNN_CRF
+from lasagne_nlp.networks.networks import build_BiLSTM_HighCNN_CRF
 
 import numpy as np
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-CNN-CRF')
+    parser = argparse.ArgumentParser(description='Tuning with bi-directional LSTM-HighCNN-CRF')
     parser.add_argument('--fine_tune', action='store_true', help='Fine tune the word embeddings')
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna', 'random'], help='Embedding for words',
                         required=True)
@@ -63,7 +63,7 @@ def main():
         layer_char_input = lasagne.layers.DimshuffleLayer(layer_char_embedding, pattern=(0, 2, 1))
         return layer_char_input
 
-    logger = utils.get_logger("BiLSTM-CNN-CRF")
+    logger = utils.get_logger("BiLSTM-HighCNN-CRF")
     fine_tune = args.fine_tune
     oov = args.oov
     regular = args.regular
@@ -116,7 +116,7 @@ def main():
     # construct bi-rnn-cnn
     num_units = args.num_units
 
-    bi_lstm_cnn_crf = build_BiLSTM_CNN_CRF(layer_incoming1, layer_incoming2, num_units, num_labels, mask=layer_mask,
+    bi_lstm_cnn_crf = build_BiLSTM_HighCNN_CRF(layer_incoming1, layer_incoming2, num_units, num_labels, mask=layer_mask,
                                            grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
                                            dropout=dropout)
 
@@ -282,8 +282,8 @@ def main():
             lr = learning_rate / (1.0 + epoch * decay_rate)
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
             train_fn = theano.function([input_var, target_var, mask_var, char_input_var],
-                                        [loss_train, corr_train, num_tokens],
-                                        updates=updates)
+                                       [loss_train, corr_train, num_tokens],
+                                       updates=updates)
 
     # print best performance on test data.
     logger.info("final best loss test performance (at epoch %d)" % best_epoch_loss)

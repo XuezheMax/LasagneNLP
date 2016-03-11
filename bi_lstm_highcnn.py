@@ -29,8 +29,8 @@ def main():
     parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov', 'adadelta'], help='update algorithm', default='sgd')
-    parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
-                        required=True)
+    parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
+    parser.add_argument('--dropout', action='store_true', help='Apply dropout layers')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
@@ -76,6 +76,7 @@ def main():
     num_filters = args.num_filters
     gamma = args.gamma
     output_predict = args.output_prediction
+    dropout = args.dropout
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, \
@@ -114,7 +115,7 @@ def main():
     num_units = args.num_units
     bi_lstm_cnn = build_BiLSTM_HighCNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
                                    grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
-                                   dropout=(regular == 'dropout'))
+                                   dropout=dropout)
 
     # reshape bi-rnn-cnn to [batch * max_length, num_units]
     bi_lstm_cnn = lasagne.layers.reshape(bi_lstm_cnn, (-1, [2]))
@@ -171,9 +172,9 @@ def main():
 
     # Finally, launch the training loop.
     logger.info(
-        "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
+        "Start training: %s with regularization: %s(%f), dropout: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f, peepholes: %s)..." \
         % (
-            update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping,
+            update_algo, regular, (0.0 if regular == 'none' else gamma), dropout, fine_tune, num_data, batch_size, grad_clipping,
             peepholes))
     num_batches = num_data / batch_size
     num_epochs = 1000

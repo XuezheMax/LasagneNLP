@@ -23,12 +23,14 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=100, help='Number of hidden units in RNN')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
+    parser.add_argument('--decay_rate', type=float, default=0.1, help='Decay rate of learning rate')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--oov', choices=['random', 'embedding'], help='Embedding for oov word', required=True)
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov'], help='update algorithm', default='sgd')
-    parser.add_argument('--regular', choices=['none', 'l2', 'dropout'], help='regularization for training',
+    parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training',
                         required=True)
+    parser.add_argument('--dropout', action='store_true', help='Apply dropout layers')
     parser.add_argument('--output_prediction', action='store_true', help='Output predictions to temp files')
     parser.add_argument('--train')  # "data/POS-penn/wsj/split1/wsj1.train.original"
     parser.add_argument('--dev')  # "data/POS-penn/wsj/split1/wsj1.dev.original"
@@ -61,6 +63,7 @@ def main():
     grad_clipping = args.grad_clipping
     gamma = args.gamma
     output_predict = args.output_prediction
+    dropout = args.dropout
 
     X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
     embedd_table, label_alphabet, _, _, _, _ = data_processor.load_dataset_sequence_labeling(train_path, dev_path,
@@ -90,7 +93,7 @@ def main():
     # construct bi-rnn
     num_units = args.num_units
     bi_rnn = build_BiRNN(layer_incoming, num_units, mask=layer_mask, grad_clipping=grad_clipping,
-                         dropout=(regular == 'dropout'))
+                         dropout=dropout)
 
     # reshape bi-rnn to [batch * max_length, num_units]
     bi_rnn = lasagne.layers.reshape(bi_rnn, (-1, [2]))
@@ -140,7 +143,7 @@ def main():
     # hyper parameters to tune: learning rate, momentum, regularization.
     batch_size = args.batch_size
     learning_rate = args.learning_rate
-    decay_rate = 0.1
+    decay_rate = args.decay_rate
     momentum = 0.9
     params = lasagne.layers.get_all_params(layer_output, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
@@ -152,9 +155,9 @@ def main():
 
     # Finally, launch the training loop.
     logger.info(
-        "Start training: %s with regularization: %s(%f), fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
+        "Start training: %s with regularization: %s(%f), dropout: %s, fine tune: %s (#training data: %d, batch size: %d, clip: %.1f)..." \
         % (
-        update_algo, regular, (0.5 if regular == 'dropout' else gamma), fine_tune, num_data, batch_size, grad_clipping))
+        update_algo, regular, (0.0 if regular == 'none' else gamma), dropout, fine_tune, num_data, batch_size, grad_clipping))
     num_batches = num_data / batch_size
     num_epochs = 1000
     best_loss = 1e+12
@@ -169,7 +172,7 @@ def main():
     lr = learning_rate
     patience = 5
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f): ' % (epoch, lr)
+        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0

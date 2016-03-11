@@ -182,3 +182,12 @@ def build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=None, grad_clippi
 
     return build_BiLSTM(incoming, num_units, mask=mask, grad_clipping=grad_clipping, peepholes=peepholes,
                         precompute_input=precompute_input, dropout=dropout)
+
+
+def build_BiLSTM_HighCNN_CRF(incoming1, incoming2, num_units, num_labels, mask=None, grad_clipping=0, precompute_input=True,
+                         peepholes=False, num_filters=20, dropout=True):
+    bi_lstm_cnn = build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=mask, grad_clipping=grad_clipping,
+                                   precompute_input=precompute_input, peepholes=peepholes,
+                                   num_filters=num_filters, dropout=dropout)
+
+    return CRFLayer(bi_lstm_cnn, num_labels, mask_input=mask)
