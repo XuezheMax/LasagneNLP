@@ -171,6 +171,11 @@ def build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=None, grad_clippi
     pool_layer = lasagne.layers.MaxPool1DLayer(cnn_layer, pool_size=pool_size)
     # reshape the layer to match highway incoming layer [batch * sent_length, num_filters, 1] --> [batch * sent_length, num_filters]
     output_cnn_layer = lasagne.layers.reshape(pool_layer, ([0], -1))
+
+    # dropout after cnn?
+    if dropout:
+        output_cnn_layer = lasagne.layers.DropoutLayer(output_cnn_layer, p=0.5)
+
     # construct highway layer
     highway_layer = HighwayDenseLayer(output_cnn_layer, nonlinearity=nonlinearities.rectify)
 
