@@ -47,12 +47,12 @@ def build_BiLSTM(incoming, num_units, mask=None, grad_clipping=0, precompute_inp
         incoming = lasagne.layers.DropoutLayer(incoming, p=0.5)
 
     ingate_forward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                          W_cell=lasagne.init.GlorotUniform())
+                          W_cell=lasagne.init.Uniform(range=0.1))
     outgate_forward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                           W_cell=lasagne.init.GlorotUniform())
+                           W_cell=lasagne.init.Uniform(range=0.1))
     # according to Jozefowicz et al.(2015), init bias of forget gate to 1.
     forgetgate_forward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                              W_cell=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(1.))
+                              W_cell=lasagne.init.Uniform(range=0.1), b=lasagne.init.Constant(1.))
     # now use tanh for nonlinear function of cell, need to try pure linear cell
     cell_forward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(), W_cell=None,
                         nonlinearity=nonlinearities.tanh)
@@ -63,12 +63,12 @@ def build_BiLSTM(incoming, num_units, mask=None, grad_clipping=0, precompute_inp
                                             forgetgate=forgetgate_forward, cell=cell_forward, name='forward')
 
     ingate_backward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                           W_cell=lasagne.init.GlorotUniform())
+                           W_cell=lasagne.init.Uniform(range=0.1))
     outgate_backward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                            W_cell=lasagne.init.GlorotUniform())
+                            W_cell=lasagne.init.Uniform(range=0.1))
     # according to Jozefowicz et al.(2015), init bias of forget gate to 1.
     forgetgate_backward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(),
-                               W_cell=lasagne.init.GlorotUniform(), b=lasagne.init.Constant(1.))
+                               W_cell=lasagne.init.Uniform(range=0.1), b=lasagne.init.Constant(1.))
     # now use tanh for nonlinear function of cell, need to try pure linear cell
     cell_backward = Gate(W_in=lasagne.init.GlorotUniform(), W_hid=lasagne.init.GlorotUniform(), W_cell=None,
                          nonlinearity=nonlinearities.tanh)
