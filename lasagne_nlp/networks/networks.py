@@ -158,7 +158,7 @@ def build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=None, grad_clippi
     conv_window = 3
     _, sent_length, _ = incoming2.output_shape
 
-    # dropout before cnn?
+    # dropout before cnn
     if dropout:
         incoming1 = lasagne.layers.DropoutLayer(incoming1, p=0.5)
 
@@ -173,8 +173,8 @@ def build_BiLSTM_HighCNN(incoming1, incoming2, num_units, mask=None, grad_clippi
     output_cnn_layer = lasagne.layers.reshape(pool_layer, ([0], -1))
 
     # dropout after cnn?
-    if dropout:
-        output_cnn_layer = lasagne.layers.DropoutLayer(output_cnn_layer, p=0.5)
+    # if dropout:
+        # output_cnn_layer = lasagne.layers.DropoutLayer(output_cnn_layer, p=0.5)
 
     # construct highway layer
     highway_layer = HighwayDenseLayer(output_cnn_layer, nonlinearity=nonlinearities.rectify)
