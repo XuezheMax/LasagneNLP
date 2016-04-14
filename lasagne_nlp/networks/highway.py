@@ -7,7 +7,7 @@ from lasagne.layers import Layer
 import lasagne.nonlinearities as nonlinearities
 
 __all__ = [
-    "HighwayDenseLayer"
+    "HighwayDenseLayer",
 ]
 
 
