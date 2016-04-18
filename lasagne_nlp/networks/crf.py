@@ -4,7 +4,6 @@ import theano.tensor as T
 
 from lasagne import init
 from lasagne.layers import MergeLayer
-from lasagne.nonlinearities import *
 
 
 class CRFLayer(MergeLayer):
