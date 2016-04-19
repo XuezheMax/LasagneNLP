@@ -161,7 +161,8 @@ def main():
                         help='activation function for hidden layers', default='rectify')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
-    parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
+    parser.add_argument('--gamma', type=float, default=1e-6, help='weight for L-norm regularization')
+    parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov', 'adadelta'], help='update algorithm',
                         default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
@@ -176,6 +177,7 @@ def main():
     num_units = args.num_units
     activation = args.activation
     gamma = args.gamma
+    delta = args.delta
 
     # construct nonlinearity
     nonlinearity = nonlinearities.rectify
@@ -203,13 +205,20 @@ def main():
 
     # get prediction
     prediction_train = lasagne.layers.get_output(network)
+    prediction_train_det = lasagne.layers.get_output(network, deterministic=True)
     prediction_eval = lasagne.layers.get_output(network, deterministic=True)
 
     logger.info("Network structure: depth=%d, hidden=%d, activation=%s" % (depth, num_units, activation))
 
     # compute loss
-    loss_train = lasagne.objectives.categorical_crossentropy(prediction_train, target_var)
-    loss_train = loss_train.mean()
+    loss_train_org = lasagne.objectives.categorical_crossentropy(prediction_train, target_var)
+    loss_train_org = loss_train_org.mean()
+
+    loss_train_expect_linear = lasagne.objectives.squared_error(prediction_train, prediction_train_det)
+    loss_train_expect_linear = loss_train_expect_linear.sum(axis=1)
+    loss_train_expect_linear = loss_train_expect_linear.mean()
+
+    loss_train = loss_train_org + delta * loss_train_expect_linear
     # l2 regularization?
     if regular == 'l2':
         l2_penalty = lasagne.regularization.regularize_network_params(network, lasagne.regularization.l2)
@@ -235,13 +244,14 @@ def main():
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
     # Compile a function performing a training step on a mini-batch
-    train_fn = theano.function([input_var, target_var], [loss_train, corr_train], updates=updates)
+    train_fn = theano.function([input_var, target_var],
+                               [loss_train, loss_train_org, loss_train_expect_linear, corr_train], updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
     eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
 
     logger.info(
-        "Start training: %s with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d)..." \
-        % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size))
+        "Start training: %s with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
     lr = learning_rate
@@ -252,6 +262,8 @@ def main():
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
         train_err = 0.0
+        train_err_org = 0.0
+        train_err_linear = 0.0
         train_corr = 0.0
         train_inst = 0
         start_time = time.time()
@@ -259,8 +271,10 @@ def main():
         train_batches = 0
         for batch in iterate_minibatches(X_train, y_train, batch_size, shuffle=True):
             inputs, targets = batch
-            err, corr = train_fn(inputs, targets)
+            err, err_org, err_linear, corr = train_fn(inputs, targets)
             train_err += err * inputs.shape[0]
+            train_err_org += err_org * inputs.shape[0]
+            train_err_linear += err_linear * inputs.shape[0]
             train_corr += corr
             train_inst += inputs.shape[0]
             train_batches += 1
@@ -269,17 +283,19 @@ def main():
 
             # update log
             sys.stdout.write("\b" * num_back)
-            log_info = 'train: %d/%d loss: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
+            log_info = 'train: %d/%d loss: %.4f, loss_org: %.4f, loss_linear: %.4f, acc: %.2f%%, time left (estimated): %.2fs' % (
                 min(train_batches * batch_size, num_data), num_data,
-                train_err / train_inst, train_corr * 100 / train_inst, time_left)
+                train_err / train_inst, train_err_org / train_inst, train_err_linear / train_inst,
+                train_corr * 100 / train_inst, time_left)
             sys.stdout.write(log_info)
             num_back = len(log_info)
         # update training log after each epoch
         assert train_inst == num_data
         sys.stdout.write("\b" * num_back)
-        print 'train: %d/%d loss: %.4f, acc: %.2f%%, time: %.2fs' % (
+        print 'train: %d/%d loss: %.4f, loss_org: %.4f, loss_linear: %.4f, acc: %.2f%%, time: %.2fs' % (
             min(train_batches * batch_size, num_data), num_data,
-            train_err / num_data, train_corr * 100 / num_data, time.time() - start_time)
+            train_err / num_data, train_err_org / num_data, train_err_linear / num_data, train_corr * 100 / num_data,
+            time.time() - start_time)
 
         # evaluate on test data
         test_err = 0.0
@@ -303,7 +319,9 @@ def main():
         if update_algo != 'adadelta':
             lr = learning_rate / (1.0 + epoch * decay_rate)
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
-            train_fn = theano.function([input_var, target_var], [loss_train, corr_train], updates=updates)
+            train_fn = theano.function([input_var, target_var],
+                                       [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
+                                       updates=updates)
 
     # print last and best performance on test data.
     logger.info("final test performance (at epoch %d)" % num_epochs)
@@ -312,6 +330,7 @@ def main():
     logger.info("final best acc test performance (at epoch %d)" % best_test_epoch)
     print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
         best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
+
 
 if __name__ == '__main__':
     main()
