@@ -153,6 +153,7 @@ def build_dropout_dnn(input_var=None, depth=2, num_units=1024, drop_input=.2, dr
 
 def main():
     parser = argparse.ArgumentParser(description='dropout experiments on mnist')
+    parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=500, help='Number of instances in each batch')
     parser.add_argument('--depth', type=int, default=2, help='Number of hidden layers')
     parser.add_argument('--num_units', type=int, default=1024, help='Number of units in hidden layers')
@@ -226,6 +227,7 @@ def main():
 
     # Create update expressions for training.
     batch_size = args.batch_size
+    num_epochs = args.num_epochs
     learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     decay_rate = args.decay_rate
     momentum = 0.9
@@ -238,13 +240,15 @@ def main():
     eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
 
     logger.info(
-        "Start training: %s with regularization: %s(%f) (#training data: %d, batch size: %d)..." \
-        % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_data, batch_size))
+        "Start training: %s with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d)..." \
+        % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size))
 
     num_batches = num_data / batch_size
-    num_epochs = 10000
     lr = learning_rate
     patience = args.patience
+    best_test_epoch = 0
+    best_test_err = 0.
+    best_test_corr = 0.
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
         train_err = 0.0
@@ -290,12 +294,24 @@ def main():
         print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
 
+        if best_test_corr < test_corr:
+            best_test_epoch = epoch
+            best_test_corr = test_corr
+            best_test_err = test_err
+
         # re-compile a function with new learning rate for training
         if update_algo != 'adadelta':
             lr = learning_rate / (1.0 + epoch * decay_rate)
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
             train_fn = theano.function([input_var, target_var], [loss_train, corr_train], updates=updates)
 
+    # print last and best performance on test data.
+    logger.info("final test performance (at epoch %d)" % num_epochs)
+    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+        test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
+    logger.info("final best acc test performance (at epoch %d)" % best_test_epoch)
+    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+        best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
 
 if __name__ == '__main__':
     main()
