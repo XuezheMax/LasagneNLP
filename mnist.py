@@ -27,8 +27,9 @@ def load_dataset():
         from urllib.request import urlretrieve
 
     def download(filename, source='http://yann.lecun.com/exdb/mnist/'):
-        print("Downloading %s" % filename)
-        urlretrieve(source + filename, filename)
+        basename = filename[11:]
+        print("Downloading %s" % basename)
+        urlretrieve(source + basename, filename)
 
     # We then define functions for loading MNIST images and labels.
     # For convenience, they also download the requested files if needed.
@@ -80,8 +81,9 @@ def load_dataset_wo_val():
         from urllib.request import urlretrieve
 
     def download(filename, source='http://yann.lecun.com/exdb/mnist/'):
-        print("Downloading %s" % filename)
-        urlretrieve(source + filename, filename)
+        basename = filename[11:]
+        print("Downloading %s" % basename)
+        urlretrieve(source + basename, filename)
 
     # We then define functions for loading MNIST images and labels.
     # For convenience, they also download the requested files if needed.
