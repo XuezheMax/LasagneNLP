@@ -52,17 +52,17 @@ def build_dnn(input_var=None):
     network = lasagne.layers.dropout(network, p=0.1)
     # The first CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=96, filter_size=(5, 5), stride=(1, 1), pad='same',
-                                         nonlinearity=nonlinearities.rectify, name='cnn1')
+                                         W=lasagne.init.Uniform(), nonlinearity=nonlinearities.rectify, name='cnn1')
     network = lasagne.layers.MaxPool2DLayer(network, pool_size=(3, 3), stride=(2, 2))
     network = lasagne.layers.dropout(network, p=0.25)
     # The second CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=128, filter_size=(5, 5), stride=(1, 1), pad='same',
-                                         nonlinearity=nonlinearities.rectify, name='cnn2')
+                                         W=lasagne.init.Uniform(), nonlinearity=nonlinearities.rectify, name='cnn2')
     network = lasagne.layers.MaxPool2DLayer(network, pool_size=(3, 3), stride=(2, 2))
     network = lasagne.layers.dropout(network, p=0.25)
     # The third CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=256, filter_size=(5, 5), stride=(1, 1), pad='same',
-                                         nonlinearity=nonlinearities.rectify, name='cnn3')
+                                         W=lasagne.init.Uniform(), nonlinearity=nonlinearities.rectify, name='cnn3')
     network = lasagne.layers.MaxPool2DLayer(network, pool_size=(3, 3), stride=(2, 2))
     network = lasagne.layers.dropout(network, p=0.5)
     # the first dense layer
@@ -144,7 +144,7 @@ def main():
     num_epochs = args.num_epochs
     learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     decay_rate = args.decay_rate
-    momentum = 0.95
+    momentum = 0.9
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
