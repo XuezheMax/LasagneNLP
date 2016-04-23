@@ -79,7 +79,7 @@ def build_dnn(input_var=None):
 def main():
     parser = argparse.ArgumentParser(description='dropout experiments on mnist')
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=500, help='Number of instances in each batch')
+    parser.add_argument('--batch_size', type=int, default=100, help='Number of instances in each batch')
     parser.add_argument('--learning_rate', type=float, default=0.1, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for L-norm regularization')
