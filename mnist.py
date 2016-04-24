@@ -141,8 +141,8 @@ def build_dropout_dnn(input_var=None, depth=2, num_units=1024, drop_input=.2, dr
     if drop_input:
         network = lasagne.layers.dropout(network, p=drop_input)
     # Hidden layers and dropout:
-    for _ in range(depth):
-        network = lasagne.layers.DenseLayer(network, num_units, nonlinearity=nonlinearity)
+    for d in range(depth):
+        network = lasagne.layers.DenseLayer(network, num_units, nonlinearity=nonlinearity, name=('hidden%d' % d))
         if drop_hidden:
             network = lasagne.layers.dropout(network, p=drop_hidden)
     # Output layer:
@@ -242,6 +242,11 @@ def main():
     momentum = 0.9
     params = lasagne.layers.get_all_params(network, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
+    params_constraint = utils.get_all_params_by_name(network,
+                                                     name=[('hidden%d.W' % d) for d in range(depth)])
+    assert len(params_constraint) == depth
+    for param in params_constraint:
+        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=2.0)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
