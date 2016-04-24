@@ -246,7 +246,7 @@ def main():
                                                      name=[('hidden%d.W' % d) for d in range(depth)])
     assert len(params_constraint) == depth
     for param in params_constraint:
-        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=2.0)
+        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=3.5)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
