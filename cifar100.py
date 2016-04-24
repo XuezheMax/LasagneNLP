@@ -25,10 +25,10 @@ def load_dataset_wo_val():
         labels = np.loadtxt(filename, np.int32)
         return labels
 
-    X_train = load_cifar10_images('data/cifar10_processed/cifar_processed_train.npy')
-    y_train = load_cifar10_labels('data/cifar10_processed/train.label.txt')
-    X_test = load_cifar10_images('data/cifar10_processed/cifar_processed_test.npy')
-    y_test = load_cifar10_labels('data/cifar10_processed/test.label.txt')
+    X_train = load_cifar10_images('data/cifar100_processed/cifar_processed_train.npy')
+    y_train = load_cifar10_labels('data/cifar100_processed/train.label.txt')
+    X_test = load_cifar10_images('data/cifar100_processed/cifar_processed_test.npy')
+    y_test = load_cifar10_labels('data/cifar100_processed/test.label.txt')
 
     return X_train, y_train, X_test, y_test
 
@@ -73,7 +73,7 @@ def build_dnn(input_var=None):
     network = lasagne.layers.dropout(network, p=0.5)
     # Output layer:
     softmax = nonlinearities.softmax
-    network = lasagne.layers.DenseLayer(network, 10, nonlinearity=softmax)
+    network = lasagne.layers.DenseLayer(network, 100, nonlinearity=softmax)
     return network
 
 def main():
@@ -91,7 +91,7 @@ def main():
 
     args = parser.parse_args()
 
-    logger = utils.get_logger("CIFAR-10")
+    logger = utils.get_logger("CIFAR-100")
     regular = args.regular
     update_algo = args.update
     gamma = args.gamma

@@ -307,13 +307,16 @@ def main():
             test_err += err * inputs.shape[0]
             test_corr += corr
             test_inst += inputs.shape[0]
-        print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-            test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
 
         if best_test_corr < test_corr:
             best_test_epoch = epoch
             best_test_corr = test_corr
             best_test_err = test_err
+
+        print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+            test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
+        print 'best test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
+            best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
 
         # re-compile a function with new learning rate for training
         if update_algo != 'adadelta':
