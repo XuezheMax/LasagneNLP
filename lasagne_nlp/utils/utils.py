@@ -141,8 +141,8 @@ def create_updates(loss, params, update_algo, learning_rate, momentum=None):
 
 
 def get_all_params_by_name(layer, name=None, **tags):
-    tags['trainable'] = tags.get('trainable', True)
-    tags['regularizable'] = tags.get('regularizable', True)
+    # tags['trainable'] = tags.get('trainable', True)
+    # tags['regularizable'] = tags.get('regularizable', True)
     params = lasagne.layers.get_all_params(layer, **tags)
     if name is None:
         return params

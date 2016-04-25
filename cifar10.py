@@ -73,20 +73,43 @@ def build_dnn(input_var=None):
     network = lasagne.layers.dropout(network, p=0.5)
     # Output layer:
     softmax = nonlinearities.softmax
-    network = lasagne.layers.DenseLayer(network, 10, nonlinearity=softmax)
+    network = lasagne.layers.DenseLayer(network, 10, nonlinearity=softmax, name='output')
     return network
 
 
+def create_updates(loss, network, learning_rate_cnn, learning_rate_dense):
+    momentum = 0.9
+    params = lasagne.layers.get_all_params(network, trainable=True)
+    params_cnn = utils.get_all_params_by_name(network, ['cnn1.W', 'cnn1.b', 'cnn2.W', 'cnn2.b', 'cnn3.W', 'cnn3.b'],
+                                              trainable=True)
+    params_dense = utils.get_all_params_by_name(network, ['dense1.W', 'dense1.b', 'dense2.W', 'dense2.b', 'output.W',
+                                                          'output.b'], trainable=True)
+    params_constraint = utils.get_all_params_by_name(network,
+                                                     name=['cnn1.W', 'cnn2.W', 'cnn3.W', 'dense1.W', 'dense2.W',
+                                                           'output.W'], trainable=True)
+    assert len(params) == 12
+    assert len(params_cnn) == 6
+    assert len(params_dense) == 6
+    assert len(params_constraint) == 6
+    updates = lasagne.updates.momentum(loss, params=params, learning_rate=learning_rate_cnn, momentum=momentum)
+    updates_dense = lasagne.updates.momentum(loss, params=params_dense, learning_rate=learning_rate_dense,
+                                             momentum=momentum)
+    for param in params_dense:
+        updates[param] = updates_dense[param]
+
+    for param in params_constraint:
+        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
+
+    return updates
+
+
 def main():
-    parser = argparse.ArgumentParser(description='dropout experiments on mnist')
+    parser = argparse.ArgumentParser(description='dropout experiments on cifar-10')
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=64, help='Number of instances in each batch')
-    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
-    parser.add_argument('--decay_rate', type=float, default=0.01, help='Decay rate of learning rate')
+    parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
+    parser.add_argument('--decay_rate', type=float, default=0.005, help='Decay rate of learning rate')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for L-norm regularization')
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
-    parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov', 'adadelta'], help='update algorithm',
-                        default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
 
@@ -94,7 +117,6 @@ def main():
 
     logger = utils.get_logger("CIFAR-10")
     regular = args.regular
-    update_algo = args.update
     gamma = args.gamma
     delta = args.delta
 
@@ -143,16 +165,11 @@ def main():
     # Create update expressions for training.
     batch_size = args.batch_size
     num_epochs = args.num_epochs
-    learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    decay_rate = args.decay_rate
-    momentum = 0.9
-    params = lasagne.layers.get_all_params(network, trainable=True)
-    updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
-    params_constraint = utils.get_all_params_by_name(network,
-                                                     name=['cnn1.W', 'cnn2.W', 'cnn3.W', 'dense1.W', 'dense2.W'])
-    assert len(params_constraint) == 5
-    for param in params_constraint:
-        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
+    # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
+    learning_rate_cnn = 0.001
+    learning_rate_dense = 0.1
+    updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
+                             learning_rate_dense=learning_rate_dense)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
@@ -161,17 +178,19 @@ def main():
     eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
 
     logger.info(
-        "Start training: %s with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
-        % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size, delta))
+        "Start training with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
-    lr = learning_rate
+    decay_rate = args.decay_rate
+    lr_cnn = learning_rate_cnn
+    lr_dense = learning_rate_dense
     patience = args.patience
     best_test_epoch = 0
     best_test_err = 0.
     best_test_corr = 0.
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
+        print 'Epoch %d (learning rate=(%.4f, %.4f), decay rate=%.4f): ' % (epoch, lr_cnn, lr_dense, decay_rate)
         train_err = 0.0
         train_err_org = 0.0
         train_err_linear = 0.0
@@ -230,18 +249,13 @@ def main():
             best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
 
         # re-compile a function with new learning rate for training
-        if update_algo != 'adadelta':
-            lr = learning_rate / (1.0 + epoch * decay_rate)
-            updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
-            params_constraint = utils.get_all_params_by_name(network,
-                                                             name=['cnn1.W', 'cnn2.W', 'cnn3.W', 'dense1.W', 'dense2.W'])
-            assert len(params_constraint) == 5
-            for param in params_constraint:
-                updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
+        lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate)
+        lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate)
+        updates = create_updates(loss_train, network, learning_rate_cnn=lr_cnn, learning_rate_dense=lr_dense)
 
-            train_fn = theano.function([input_var, target_var],
-                                       [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
-                                       updates=updates)
+        train_fn = theano.function([input_var, target_var],
+                                   [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
+                                   updates=updates)
 
     # print last and best performance on test data.
     logger.info("final test performance (at epoch %d)" % num_epochs)
