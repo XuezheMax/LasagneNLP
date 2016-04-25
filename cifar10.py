@@ -233,6 +233,12 @@ def main():
         if update_algo != 'adadelta':
             lr = learning_rate / (1.0 + epoch * decay_rate)
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
+            params_constraint = utils.get_all_params_by_name(network,
+                                                             name=['cnn1.W', 'cnn2.W', 'cnn3.W', 'dense1.W', 'dense2.W'])
+            assert len(params_constraint) == 5
+            for param in params_constraint:
+                updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
+
             train_fn = theano.function([input_var, target_var],
                                        [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
                                        updates=updates)
