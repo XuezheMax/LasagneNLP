@@ -108,7 +108,7 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
     parser.add_argument('--decay_rate', type=float, default=0.005, help='Decay rate of learning rate')
-    parser.add_argument('--gamma', type=float, default=1e-6, help='weight for L-norm regularization')
+    parser.add_argument('--gamma', type=float, default=1e-3, help='weight for L-norm regularization')
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
@@ -149,7 +149,10 @@ def main():
     loss_train = loss_train_org + delta * loss_train_expect_linear
     # l2 regularization?
     if regular == 'l2':
-        l2_penalty = lasagne.regularization.regularize_network_params(network, lasagne.regularization.l2)
+        params_regular = utils.get_all_params_by_name(network, name=['cnn1.W', 'cnn2.W', 'cnn3.W', 'output.W'],
+                                                      trainable=True, regularizable=True)
+        assert len(params_regular) == 4
+        l2_penalty = lasagne.regularization.apply_penalty(params_regular, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
 
     loss_eval = lasagne.objectives.categorical_crossentropy(prediction_eval, target_var)
