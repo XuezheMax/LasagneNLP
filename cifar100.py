@@ -77,8 +77,7 @@ def build_dnn(input_var=None):
     return network
 
 
-def create_updates(loss, network, learning_rate_cnn, learning_rate_dense):
-    momentum = 0.9
+def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, momentum):
     params = lasagne.layers.get_all_params(network, trainable=True)
     params_cnn = utils.get_all_params_by_name(network, ['cnn1.W', 'cnn1.b', 'cnn2.W', 'cnn2.b', 'cnn3.W', 'cnn3.b'],
                                               trainable=True)
@@ -169,10 +168,13 @@ def main():
     batch_size = args.batch_size
     num_epochs = args.num_epochs
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    learning_rate_cnn = 0.001
+    learning_rate_cnn = 0.002
     learning_rate_dense = 0.1
+    momentum0 = 0.5
+    momentum1 = 0.95
+    momentum_increase_rate = 0.05
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
-                             learning_rate_dense=learning_rate_dense)
+                             learning_rate_dense=learning_rate_dense, momentum=momentum0)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
@@ -188,12 +190,14 @@ def main():
     decay_rate = args.decay_rate
     lr_cnn = learning_rate_cnn
     lr_dense = learning_rate_dense
+    momentum = momentum0
     patience = args.patience
     best_test_epoch = 0
     best_test_err = 0.
     best_test_corr = 0.
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=(%.4f, %.4f), decay rate=%.4f): ' % (epoch, lr_cnn, lr_dense, decay_rate)
+        print 'Epoch %d (learning rate=(%.4f, %.4f), decay rate=%.4f, momentum=%.4f, increase rate=%.4f): ' % (
+            epoch, lr_cnn, lr_dense, decay_rate, momentum, momentum_increase_rate)
         train_err = 0.0
         train_err_org = 0.0
         train_err_linear = 0.0
@@ -254,7 +258,14 @@ def main():
         # re-compile a function with new learning rate for training
         lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate)
         lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate)
-        updates = create_updates(loss_train, network, learning_rate_cnn=lr_cnn, learning_rate_dense=lr_dense)
+        f = momentum_increase_rate * epoch
+        if f > 1.0:
+            momentum = momentum1
+        else:
+            momentum = (1 - f) * momentum0 + f * momentum1
+
+        updates = create_updates(loss_train, network, learning_rate_cnn=lr_cnn, learning_rate_dense=lr_dense,
+                                 momentum=momentum)
 
         train_fn = theano.function([input_var, target_var],
                                    [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
