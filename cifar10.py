@@ -168,7 +168,7 @@ def main():
     batch_size = args.batch_size
     num_epochs = args.num_epochs
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    learning_rate_cnn = 0.002
+    learning_rate_cnn = 0.001
     learning_rate_dense = 0.1
     momentum0 = 0.5
     momentum1 = 0.95
