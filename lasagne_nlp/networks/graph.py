@@ -109,7 +109,7 @@ class GraphConvLayer(MergeLayer):
         num_filters = self.num_filters
 
         # vertex_conv shape [batch, n, n, channel]
-        vertex_conv = T.cast(T.alloc(0.0, vertex_shape[0], vertex_shape[1], vertex_shape[1], vertex_shape[2]), 'floatX')
+        vertex_conv = T.cast(T.alloc(0.0, batch_size, num_vertex, num_vertex, num_channel), 'floatX')
         vertex_conv = vertex_conv + vertex.dimshuffle(0, 'x', 1, 2)
         # reshape vertex_conv to [batch * n, n, channel]
         vertex_conv = T.reshape(vertex_conv, (batch_size * num_vertex, num_vertex, num_channel))
@@ -140,6 +140,3 @@ class GraphConvLayer(MergeLayer):
         activation = T.reshape(activation, (batch_size, num_vertex, num_filters))
         # shuffle it to [batch, num_filters, n]
         return activation.dimshuffle(0, 2, 1)
-
-
-

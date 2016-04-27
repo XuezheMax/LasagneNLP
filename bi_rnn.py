@@ -42,8 +42,7 @@ def main():
         if fine_tune:
             layer_input = lasagne.layers.InputLayer(shape=(None, max_length), input_var=input_var, name='input')
             layer_embedding = lasagne.layers.EmbeddingLayer(layer_input, input_size=alphabet_size,
-                                                            output_size=embedd_dim,
-                                                            W=embedd_table, name='embedding')
+                                                            output_size=embedd_dim, W=embedd_table, name='embedding')
             return layer_embedding
         else:
             layer_input = lasagne.layers.InputLayer(shape=(None, max_length, embedd_dim), input_var=input_var,
