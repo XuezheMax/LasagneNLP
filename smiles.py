@@ -91,6 +91,14 @@ def load_smiles_data(embedd_dim):
         return np.sqrt(dist)
 
     def construct_tensor(molecules, values):
+        '''
+        :param molecules:
+        :param values:
+        :return:
+
+        -----------------------------
+        TODO distance between two disconnected atom (using coordinates or set to max_distance?)
+        '''
         num_data = len(molecules)
         X_vertex = np.empty([num_data, max_size], dtype=np.int32)
         X_edge = np.empty([num_data, max_size, max_size, 1], dtype=theano.config.floatX)
