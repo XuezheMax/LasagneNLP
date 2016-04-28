@@ -117,7 +117,7 @@ class GraphConvLayer(MergeLayer):
         edge = inputs[self.edge_incoming_index]
         edge_sorted_indices = argsort(edge, axis=3)
         # take last filter_size indices. the shape of edge_sorted_indices is [batch, d, n, k]
-        edge_sorted_indices = edge_sorted_indices[:, :, :, -filter_size:]
+        edge_sorted_indices = edge_sorted_indices[:, :, :, :filter_size]
         # shuffle indices to shape [batch, n, d, k]
         edge_sorted_indices = edge_sorted_indices.dimshuffle(0, 2, 1, 3)
         # reshape indices to shape [batch * n, d * k]
