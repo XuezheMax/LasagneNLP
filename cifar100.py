@@ -90,11 +90,12 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
     assert len(params_cnn) == 6
     assert len(params_dense) == 6
     assert len(params_constraint) == 6
-    updates = lasagne.updates.momentum(loss, params=params, learning_rate=learning_rate_cnn, momentum=momentum)
-    updates_dense = lasagne.updates.momentum(loss, params=params_dense, learning_rate=learning_rate_dense,
-                                             momentum=momentum)
+    updates = lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate_cnn)
+    updates_dense = lasagne.updates.sgd(loss, params=params_dense, learning_rate=learning_rate_dense)
     for param in params_dense:
         updates[param] = updates_dense[param]
+    
+    updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
 
     for param in params_constraint:
         updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
