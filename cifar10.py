@@ -171,8 +171,8 @@ def main():
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     learning_rate_cnn = 0.001
     learning_rate_dense = 0.1
-    momentum0 = 0.8
-    momentum1 = 0.95
+    momentum0 = 0.5
+    momentum1 = 0.9
     momentum_increase_rate = 0.05
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
                              learning_rate_dense=learning_rate_dense, momentum=momentum0)
