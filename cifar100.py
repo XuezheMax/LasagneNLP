@@ -77,7 +77,7 @@ def build_dnn(input_var=None):
     return network
 
 
-def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, momentum):
+def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type):
     params = lasagne.layers.get_all_params(network, trainable=True)
     params_cnn = utils.get_all_params_by_name(network, ['cnn1.W', 'cnn1.b', 'cnn2.W', 'cnn2.b', 'cnn3.W', 'cnn3.b'],
                                               trainable=True)
@@ -95,13 +95,18 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
     for param in params_dense:
         assert param in updates
         updates[param] = updates_dense[param]
-    
+    # apply momentum term
+    if momentum_type == 'normal':
+        updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
+    elif momentum_type == 'nesterov':
+        updates = lasagne.updates.apply_nesterov_momentum(updates, momentum=momentum)
+    else:
+        raise ValueError('unkown momentum type: %s' % momentum_type)
+    # add norm constraints (should be after momentum)
     for param in params_constraint:
         assert param in updates
         updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
     
-    updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
-
     return updates
 
 
@@ -110,6 +115,9 @@ def main():
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
     parser.add_argument('--decay_rate', type=float, default=0.005, help='Decay rate of learning rate')
+    parser.add_argument('--momentum0', type=float, default=0.5, help='initial momentum')
+    parser.add_argument('--momentum1', type=float, default=0.95, help='final momentum')
+    parser.add_argument('--momentum_type', choices=['normal', 'nesterov'], help='type of momentum', required=True)
     parser.add_argument('--gamma', type=float, default=1e-3, help='weight for L-norm regularization')
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
@@ -173,11 +181,12 @@ def main():
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     learning_rate_cnn = 0.001
     learning_rate_dense = 0.1
-    momentum0 = 0.7
-    momentum1 = 0.9
-    momentum_increase_rate = 0.1
+    momentum0 = args.momentum0
+    momentum1 = args.momentum1
+    momentum_type = args.momentum_type
+    momentum_increase_rate = 0.05
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
-                             learning_rate_dense=learning_rate_dense, momentum=momentum0)
+                             learning_rate_dense=learning_rate_dense, momentum=momentum0, momentum_type=momentum_type)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
@@ -268,7 +277,7 @@ def main():
             momentum = (1 - f) * momentum0 + f * momentum1
 
         updates = create_updates(loss_train, network, learning_rate_cnn=lr_cnn, learning_rate_dense=lr_dense,
-                                 momentum=momentum)
+                                 momentum=momentum, momentum_type=momentum_type)
 
         train_fn = theano.function([input_var, target_var],
                                    [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
