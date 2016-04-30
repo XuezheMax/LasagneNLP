@@ -195,8 +195,8 @@ def main():
     eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
 
     logger.info(
-        "Start training with regularization: %s(%f) (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
-        % (regular, (0.0 if regular == 'none' else gamma), num_epochs, num_data, batch_size, delta))
+        "Start training with regularization: %s(%f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (regular, (0.0 if regular == 'none' else gamma), momentum_type, num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
     decay_rate = args.decay_rate
@@ -264,8 +264,8 @@ def main():
 
         print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
-        print 'best test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-            best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
+        print 'best test loss: %.4f, corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
+            best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst, best_test_epoch)
 
         # re-compile a function with new learning rate for training
         lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate)
