@@ -96,12 +96,12 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
         assert param in updates
         updates[param] = updates_dense[param]
     
+    updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
+
     for param in params_constraint:
         assert param in updates
         updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
     
-    updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
-
     return updates
 
 
