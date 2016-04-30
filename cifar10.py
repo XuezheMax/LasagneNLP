@@ -184,7 +184,7 @@ def main():
     momentum0 = args.momentum0
     momentum1 = args.momentum1
     momentum_type = args.momentum_type
-    momentum_increase_rate = 0.1
+    momentum_increase_rate = 0.05
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
                              learning_rate_dense=learning_rate_dense, momentum=momentum0, momentum_type=momentum_type)
 
