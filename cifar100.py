@@ -93,9 +93,11 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
     updates = lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate_cnn)
     updates_dense = lasagne.updates.sgd(loss, params=params_dense, learning_rate=learning_rate_dense)
     for param in params_dense:
+        assert param in updates
         updates[param] = updates_dense[param]
     
     for param in params_constraint:
+        assert param in updates
         updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
     
     updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
@@ -171,9 +173,9 @@ def main():
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     learning_rate_cnn = 0.001
     learning_rate_dense = 0.1
-    momentum0 = 0.5
-    momentum1 = 0.95
-    momentum_increase_rate = 0.05
+    momentum0 = 0.7
+    momentum1 = 0.9
+    momentum_increase_rate = 0.1
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
                              learning_rate_dense=learning_rate_dense, momentum=momentum0)
 
