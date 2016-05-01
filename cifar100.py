@@ -114,6 +114,7 @@ def main():
     parser = argparse.ArgumentParser(description='dropout experiments on cifar-100')
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
+    parser.add_argument('--learning_rate_cnn', type=float, default=0.001, help='learning rate for CNN')
     parser.add_argument('--decay_rate', type=float, default=0.005, help='Decay rate of learning rate')
     parser.add_argument('--momentum0', type=float, default=0.5, help='initial momentum')
     parser.add_argument('--momentum1', type=float, default=0.95, help='final momentum')
@@ -179,7 +180,7 @@ def main():
     batch_size = args.batch_size
     num_epochs = args.num_epochs
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
-    learning_rate_cnn = 0.001
+    learning_rate_cnn = args.learning_rate_cnn
     learning_rate_dense = 0.1
     momentum0 = args.momentum0
     momentum1 = args.momentum1
