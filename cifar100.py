@@ -105,7 +105,7 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
     # add norm constraints (should be after momentum)
     for param in params_constraint:
         assert param in updates
-        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=4.0)
+        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=2.0)
     
     return updates
 
