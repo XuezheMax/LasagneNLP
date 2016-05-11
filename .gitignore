@@ -76,6 +76,9 @@ target/
 # tmp dir
 /tmp/
 
+# experiments dir
+/experiments/
+
 # IDE 
 /.idea/
 *.iml
