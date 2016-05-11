@@ -116,7 +116,8 @@ def main():
     parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
     parser.add_argument('--learning_rate_cnn', type=float, default=0.001, help='learning rate for CNNs')
     parser.add_argument('--learning_rate_dense', type=float, default=0.1, help='learning rate for dense layers')
-    parser.add_argument('--decay_rate', type=float, default=0.005, help='Decay rate of learning rate')
+    parser.add_argument('--decay_rate_cnn', type=float, default=0.005, help='Decay rate of learning rate for CNNs')
+    parser.add_argument('--decay_rate_dense', type=float, default=0.01, help='Decay rate of learning rate for dense layers')
     parser.add_argument('--momentum0', type=float, default=0.5, help='initial momentum')
     parser.add_argument('--momentum1', type=float, default=0.95, help='final momentum')
     parser.add_argument('--momentum_type', choices=['normal', 'nesterov'], help='type of momentum', required=True)
@@ -201,7 +202,8 @@ def main():
         % (regular, (0.0 if regular == 'none' else gamma), momentum_type, num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
-    decay_rate = args.decay_rate
+    decay_rate_cnn = args.decay_rate_cnn
+    decay_rate_dense = args.decay_rate_dense
     lr_cnn = learning_rate_cnn
     lr_dense = learning_rate_dense
     momentum = momentum0
@@ -210,8 +212,8 @@ def main():
     best_test_err = 0.
     best_test_corr = 0.
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=(%.4f, %.4f), decay rate=%.4f, momentum=%.4f, increase rate=%.4f): ' % (
-            epoch, lr_cnn, lr_dense, decay_rate, momentum, momentum_increase_rate)
+        print 'Epoch %d (learning rate=(%.5f, %.5f), decay rate=(%.4f, %.4f), momentum=%.4f, increase rate=%.4f): ' % (
+            epoch, lr_cnn, lr_dense, decay_rate_cnn, decay_rate_dense, momentum, momentum_increase_rate)
         train_err = 0.0
         train_err_org = 0.0
         train_err_linear = 0.0
@@ -270,8 +272,8 @@ def main():
             best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst, best_test_epoch)
 
         # re-compile a function with new learning rate for training
-        lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate)
-        lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate)
+        lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate_cnn)
+        lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate_dense)
         f = momentum_increase_rate * epoch
         if f > 1.0:
             momentum = momentum1
