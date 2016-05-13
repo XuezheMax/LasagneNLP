@@ -77,7 +77,7 @@ def build_dnn(input_var=None):
     return network
 
 
-def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type):
+def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type, max_norm):
     params = lasagne.layers.get_all_params(network, trainable=True)
     params_cnn = utils.get_all_params_by_name(network, ['cnn1.W', 'cnn1.b', 'cnn2.W', 'cnn2.b', 'cnn3.W', 'cnn3.b'],
                                               trainable=True)
@@ -105,7 +105,7 @@ def create_updates(loss, network, learning_rate_cnn, learning_rate_dense, moment
     # add norm constraints (should be after momentum)
     for param in params_constraint:
         assert param in updates
-        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=2.0)
+        updates[param] = lasagne.updates.norm_constraint(updates[param], max_norm=max_norm)
     
     return updates
 
@@ -121,6 +121,7 @@ def main():
     parser.add_argument('--momentum0', type=float, default=0.5, help='initial momentum')
     parser.add_argument('--momentum1', type=float, default=0.95, help='final momentum')
     parser.add_argument('--momentum_type', choices=['normal', 'nesterov'], help='type of momentum', required=True)
+    parser.add_argument('--max_norm', type=float, default=2.0, help='weight for max-norm regularization')
     parser.add_argument('--gamma', type=float, default=1e-3, help='weight for L-norm regularization')
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
@@ -188,8 +189,10 @@ def main():
     momentum1 = args.momentum1
     momentum_type = args.momentum_type
     momentum_increase_rate = 0.05
+    max_norm = args.max_norm
     updates = create_updates(loss_train, network, learning_rate_cnn=learning_rate_cnn,
-                             learning_rate_dense=learning_rate_dense, momentum=momentum0, momentum_type=momentum_type)
+                             learning_rate_dense=learning_rate_dense, momentum=momentum0, momentum_type=momentum_type, 
+                             max_norm=max_norm)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, target_var],
@@ -198,8 +201,8 @@ def main():
     eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
 
     logger.info(
-        "Start training with regularization: %s(%f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
-        % (regular, (0.0 if regular == 'none' else gamma), momentum_type, num_epochs, num_data, batch_size, delta))
+        "Start training with regularization: %s(%f), max-norm(%.1f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (regular, (0.0 if regular == 'none' else gamma), max_norm, momentum_type, num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
     decay_rate_cnn = args.decay_rate_cnn
@@ -281,7 +284,7 @@ def main():
             momentum = (1 - f) * momentum0 + f * momentum1
 
         updates = create_updates(loss_train, network, learning_rate_cnn=lr_cnn, learning_rate_dense=lr_dense,
-                                 momentum=momentum, momentum_type=momentum_type)
+                                 momentum=momentum, momentum_type=momentum_type, max_norm=max_norm)
 
         train_fn = theano.function([input_var, target_var],
                                    [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
