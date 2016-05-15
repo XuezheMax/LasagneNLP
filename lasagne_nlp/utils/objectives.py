@@ -6,6 +6,7 @@ __author__ = 'max'
 import numpy as np
 import theano
 import theano.tensor as T
+import lasagne_nlp.theano.nlinalg as nlinalg
 
 
 def theano_logsumexp(x, axis=None):
@@ -28,6 +29,64 @@ def theano_logsumexp(x, axis=None):
     xmax = x.max(axis=axis, keepdims=True)
     xmax_ = x.max(axis=axis)
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
+
+
+def parser_loss(energies, targets, masks):
+    """
+    compute minus log likelihood of parser as parser loss.
+    :param energies: Theano 4D tensor
+        energies of each edge. the shape is [batch_size, n_steps, n_steps, num_labels],
+        where the summy root is at index 0.
+    :param targets: Theano 2D tensor
+        targets in the shape [batch_size, n_steps].
+    :param masks: Theano 2D tensor
+        masks in the shape [batch_size, n_steps].
+    :return: Theano 1D tensor
+        an expression for minus log likelihood loss.
+    """
+    input_shape = energies.shape
+    batch_size = input_shape[0]
+    length = input_shape[1]
+    # get the exp of energies, and add along the label axis.
+    # the shape is [batch_size, n, n].
+    E = T.exp(energies).sum(axis=3)
+
+    # zero out the elements out the length of each sentence.
+    if masks is not None:
+        masks_shuffled = masks.dimshuffle(0, 1, 'x')
+        E = E * masks_shuffled
+        masks_shuffled = masks.dimshuffle(0, 'x', 1)
+        E = E * masks_shuffled
+
+    # compute the D tensor.
+    # the shape is [batch_size, n, n]
+    D = E.sum(axis=1)
+    # ones out the elements out the length of each sentence.
+    D += 1 - masks
+    # D = diag(D)
+    D = D.dimshuffle(0, 1, 'x') + T.zeros_like(E)
+    # zeros out all elements except diagonal.
+    D = D * T.eye(length, length, 0).dimshuffle('x', 0, 1)
+
+    # compute laplacian matrix
+    L = D - E
+    # compute minor L[0, 0]
+    L_minor = L[:, 1:, 1:]
+
+    # compute partition Z(x)
+    partition = nlinalg.logabsdet(L_minor)
+
+    # compute targets energy
+    # first create indice matrix
+    indices = T.zeros_like(targets) + T.arange(length).dimshuffle('x', 0)
+    # compute loss matrix shape = [n_steps, batch_size]
+    target_energy = energies[T.arange(batch_size), targets.T, indices.T]
+    # shuffle loss to [batch_size, n_steps]
+    target_energy = target_energy.dimshuffle(1, 0)
+    # sum over n_step shape = [batch_size]
+    target_energy = target_energy.sum(axis=1)
+
+    return partition - target_energy
 
 
 def crf_loss(energies, targets, masks):

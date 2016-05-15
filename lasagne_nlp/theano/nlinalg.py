@@ -11,7 +11,7 @@ from theano.tensor.nlinalg import matrix_inverse
 
 class LogAbsDet(Op):
     """
-    Computes the logarithm of absolute determinant of a square
+    Computes the logarithm of absolute determinants of a sequence of square
     matrix M, log(abs(det(M))), on CPU. Avoids det(M) overflow/
     underflow.
 
@@ -28,7 +28,7 @@ class LogAbsDet(Op):
             (x,) = inputs
             (z,) = outputs
             s = numpy.linalg.svd(x, compute_uv=False)
-            log_abs_det = numpy.sum(numpy.log(numpy.abs(s)))
+            log_abs_det = numpy.sum(numpy.log(numpy.abs(s)), axis=1)
             z[0] = numpy.asarray(log_abs_det, dtype=x.dtype)
         except Exception:
             print('Failed to compute logabsdet of {}.'.format(x))
