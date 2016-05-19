@@ -88,6 +88,121 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
     return word_sentences, label_sentences, word_index_sentences, label_index_sentences
 
 
+def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_column=1, pos_column=4, head_column=6,
+                       type_column=7):
+    """
+    read data from conll format for parsing
+    :param path: ile path
+    :param word_alphabet:
+    :param pos_alphabet:
+    :param type_alphabet:
+    :param word_column: the column index of word (start from 0)
+    :param pos_column: the column index of pos (start from 0)
+    :param head_column: the column index of head (start from 0)
+    :param type_column: the column index of types (start from 0)
+    :return:
+    """
+
+    word_sentences = []
+    pos_sentences = []
+    head_sentences = []
+    type_sentence = []
+
+    word_index_sentences = []
+    pos_index_sentences = []
+    type_index_sentences = []
+
+    words = []
+    poss = []
+    heads = []
+    types = []
+
+    word_ids = []
+    pos_ids = []
+    type_ids = []
+
+    # initialization
+    root_word_id = word_alphabet.get_index(root_symbol)
+    root_pos_id = pos_alphabet.get_index(root_symbol)
+    root_type_id = type_alphabet.get_index(root_label)
+
+    logger.info('Root symbol index: word=%d, pos=%d, type=%d' % (root_word_id, root_pos_id, root_type_id))
+
+    words.append(root_symbol)
+    poss.append(root_symbol)
+    heads.append(-1)
+    types.append((root_label))
+
+    word_ids.append(root_word_id)
+    pos_ids.append(root_pos_id)
+    type_ids.append(root_type_id)
+
+    num_tokens = 0
+    with open(path) as file:
+        for line in file:
+            if line.strip() == "":
+                if 0 < len(words) <= MAX_LENGTH:
+                    word_sentences.append(words[:])
+                    pos_sentences.append(poss[:])
+                    head_sentences.append((heads[:]))
+                    type_sentence.append(types[:])
+
+                    word_index_sentences.append(word_ids[:])
+                    pos_index_sentences.append(pos_ids[:])
+                    type_index_sentences.append(type_ids[:])
+
+                    num_tokens += len(words)
+                else:
+                    if len(words) != 0:
+                        logger.info("ignore sentence with length %d" % (len(words)))
+
+                words.append(root_symbol)
+                poss.append(root_symbol)
+                heads.append(-1)
+                types.append((root_label))
+
+                word_ids.append(root_word_id)
+                pos_ids.append(root_pos_id)
+                type_ids.append(root_type_id)
+            else:
+                tokens = line.strip().split()
+                word = tokens[word_column]
+                pos = tokens[pos_column]
+                head = int(tokens[head_column])
+                type = tokens[type_column]
+
+                words.append(word)
+                poss.append(pos)
+                heads.append(head)
+                types.append(type)
+
+                word_id = word_alphabet.get_index(word)
+                pos_id = pos_alphabet.get_index(pos)
+                type_id = type_alphabet.get_index(type)
+
+                word_ids.append(word_id)
+                pos_ids.append(pos_id)
+                type_ids.append(type_id)
+
+    if 0 < len(words) <= MAX_LENGTH:
+        word_sentences.append(words[:])
+        pos_sentences.append(poss[:])
+        head_sentences.append((heads[:]))
+        type_sentence.append(types[:])
+
+        word_index_sentences.append(word_ids[:])
+        pos_index_sentences.append(pos_ids[:])
+        type_index_sentences.append(type_ids[:])
+
+        num_tokens += len(words)
+    else:
+        if len(words) != 0:
+            logger.info("ignore sentence with length %d" % (len(words)))
+
+    logger.info("#sentences: %d, #tokens: %d" % (len(word_sentences), num_tokens))
+    return word_sentences, pos_sentences, head_sentences, type_sentence, word_index_sentences, pos_index_sentences, type_index_sentences
+
+
 def generate_character_data(sentences_train, sentences_dev, sentences_test, max_sent_length, char_embedd_dim=30):
     """
     generate data for charaters
@@ -166,6 +281,26 @@ def generate_character_data(sentences_train, sentences_dev, sentences_test, max_
     return C_train, C_dev, C_test, build_char_embedd_table()
 
 
+def get_max_length(word_sentences):
+    max_len = 0
+    for sentence in word_sentences:
+        length = len(sentence)
+        if length > max_len:
+            max_len = length
+    return max_len
+
+
+def build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless):
+    scale = np.sqrt(3.0 / embedd_dim)
+    embedd_table = np.empty([word_alphabet.size(), embedd_dim], dtype=theano.config.floatX)
+    embedd_table[word_alphabet.default_index, :] = np.random.uniform(-scale, scale, [1, embedd_dim])
+    for word, index in word_alphabet.iteritems():
+        ww = word.lower() if caseless else word
+        embedd = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale, [1, embedd_dim])
+        embedd_table[index, :] = embedd
+    return embedd_table
+
+
 def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=1, label_column=4,
                                    label_name='pos', oov='embedding', fine_tune=False, embedding="word2Vec",
                                    embedding_path=None,
@@ -187,14 +322,6 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
     :return: X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test,
             embedd_table (if fine tune), label_alphabet, C_train, C_dev, C_test, char_embedd_table
     """
-
-    def get_max_length(word_sentences):
-        max_len = 0
-        for sentence in word_sentences:
-            length = len(sentence)
-            if length > max_len:
-                max_len = length
-        return max_len
 
     def construct_tensor_fine_tune(word_index_sentences, label_index_sentences):
         X = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
@@ -219,16 +346,6 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
             mask[i, :length] = 1
         return X, Y, mask
 
-    def build_embedd_table(embedd_dict, embedd_dim, caseless):
-        scale = np.sqrt(3.0 / embedd_dim)
-        embedd_table = np.empty([word_alphabet.size(), embedd_dim], dtype=theano.config.floatX)
-        embedd_table[word_alphabet.default_index, :] = np.random.uniform(-scale, scale, [1, embedd_dim])
-        for word, index in word_alphabet.iteritems():
-            ww = word.lower() if caseless else word
-            embedd = embedd_dict[ww] if ww in embedd_dict else np.random.uniform(-scale, scale, [1, embedd_dim])
-            embedd_table[index, :] = embedd
-        return embedd_table
-
     def generate_dataset_fine_tune():
         """
         generate data tensor when fine tuning
@@ -248,7 +365,7 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
                                                                             max_length) if use_character else (
             None, None, None, None)
         return X_train, Y_train, mask_train, X_dev, Y_dev, mask_dev, X_test, Y_test, mask_test, \
-               build_embedd_table(embedd_dict, embedd_dim, caseless), label_alphabet, \
+               build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless), label_alphabet, \
                C_train, C_dev, C_test, char_embedd_table
 
     def construct_tensor_not_fine_tune(word_sentences, label_index_sentences, unknown_embedd, embedd_dict,
@@ -364,3 +481,131 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
     else:
         logger.info("Generating data without fine tuning...")
         return generate_dataset_not_fine_tune()
+
+
+def load_dataset_parsing(train_path, dev_path, test_path, word_column=1, pos_column=4, head_column=6, type_column=7,
+                         embedding="word2Vec", embedding_path=None):
+    """
+
+    load data from file
+    :param train_path: path of training file
+    :param dev_path: path of dev file
+    :param test_path: path of test file
+    :param word_column: the column index of word (start from 0)
+    :param pos_column: the column index of pos (start from 0)
+    :param head_column: the column index of head (start from 0)
+    :param type_column: the column index of types (start from 0)
+    :param embedding: embeddings for words, choose from ['word2vec', 'senna'].
+    :param embedding_path: path of file storing word embeddings.
+    :return: X_train, POS_train, Head_train, Type_train, mask_train,
+             X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
+             X_test, POS_test, Head_test, Type_test, mask_test,
+             embedd_table, word_alphabet, pos_alphabet, type_alphabet, C_train, C_dev, C_test, char_embedd_table
+    """
+
+    def construct_tensor(word_index_sentences, pos_index_sentences, head_sentences, type_index_sentences):
+        X = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
+        POS = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
+        Head = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
+        Type = np.empty([len(word_index_sentences), max_length], dtype=np.int32)
+        mask = np.zeros([len(word_index_sentences), max_length], dtype=theano.config.floatX)
+
+        for i in range(len(word_index_sentences)):
+            word_ids = word_index_sentences[i]
+            pos_ids = pos_index_sentences[i]
+            heads = head_sentences[i]
+            type_ids = type_index_sentences[i]
+            length = len(word_ids)
+            for j in range(length):
+                wid = word_ids[j]
+                pid = pos_ids[j]
+                head = heads[j]
+                tid = type_ids[j]
+                X[i, j] = wid
+                POS[i, j] = pid - 1
+                Head[i, j] = head
+                Type[i, j] = tid - 1
+
+            # Zero out X after the end of the sequence
+            X[i, length:] = 0
+            # Copy the last label after the end of the sequence
+            POS[i, length:] = POS[i, length - 1]
+            Head[i, length:] = Head[i, length - 1]
+            Type[i, length:] = Type[i, length - 1]
+            # Make the mask for this sample 1 within the range of length
+            mask[i, :length] = 1
+        return X, POS, Head, Type, mask
+
+    word_alphabet = Alphabet('word')
+    pos_alphabet = Alphabet('pos')
+    type_alphabet = Alphabet('type')
+
+    # read training data
+    logger.info("Reading data from training set...")
+    word_sentences_train, pos_sentences_train, head_sentences_train, type_sentence_train, \
+    word_index_sentences_train, pos_index_sentences_train, \
+    type_index_sentences_train = read_conll_parsing(train_path, word_alphabet, pos_alphabet, type_alphabet, word_column,
+                                                    pos_column, head_column, type_column)
+
+    # read dev data
+    logger.info("Reading data from dev set...")
+    word_sentences_dev, pos_sentences_dev, head_sentences_dev, type_sentence_dev, \
+    word_index_sentences_dev, pos_index_sentences_dev, \
+    type_index_sentences_dev = read_conll_parsing(dev_path, word_alphabet, pos_alphabet, type_alphabet, word_column,
+                                                  pos_column, head_column, type_column)
+
+    # read test data
+    logger.info("Reading data from test set...")
+    word_sentences_test, pos_sentences_test, head_sentences_test, type_sentence_test, \
+    word_index_sentences_test, pos_index_sentences_test, \
+    type_index_sentences_test = read_conll_parsing(test_path, word_alphabet, pos_alphabet, type_alphabet, word_column,
+                                                   pos_column, head_column, type_column)
+
+    # close alphabets
+    word_alphabet.close()
+    pos_alphabet.close()
+    type_alphabet.close()
+
+    logger.info("word alphabet size: %d" % (word_alphabet.size() - 1))
+    logger.info("pos alphabet size: %d" % (pos_alphabet.size() - 1))
+    logger.info("type alphabet size: %d" % (type_alphabet.size() - 1))
+
+    # get maximum length
+    max_length_train = get_max_length(word_sentences_train)
+    max_length_dev = get_max_length(word_sentences_dev)
+    max_length_test = get_max_length(word_sentences_test)
+    max_length = min(MAX_LENGTH, max(max_length_train, max_length_dev, max_length_test))
+    logger.info("Maximum length of training set is %d" % max_length_train)
+    logger.info("Maximum length of dev set is %d" % max_length_dev)
+    logger.info("Maximum length of test set is %d" % max_length_test)
+    logger.info("Maximum length used for training is %d" % max_length)
+
+    embedd_dict, embedd_dim, caseless = utils.load_word_embedding_dict(embedding, embedding_path, word_alphabet,
+                                                                       logger)
+    logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
+    # fill data tensor (X.shape = [#data, max_length], {POS, Head, Type}.shape = [#data, max_length])
+    X_train, POS_train, Head_train, Type_train, mask_train = construct_tensor(word_sentences_train,
+                                                                              pos_index_sentences_train,
+                                                                              head_sentences_train,
+                                                                              type_index_sentences_train)
+
+    X_dev, POS_dev, Head_dev, Type_dev, mask_dev = construct_tensor(word_sentences_dev,
+                                                                    pos_index_sentences_dev,
+                                                                    head_sentences_dev,
+                                                                    type_index_sentences_dev)
+
+    X_test, POS_test, Head_test, Type_test, mask_test = construct_tensor(word_sentences_test,
+                                                                         pos_index_sentences_test,
+                                                                         head_sentences_test,
+                                                                         type_index_sentences_test)
+
+    embedd_table = build_embedd_table(word_alphabet, embedd_dict, embedd_dim, caseless)
+
+    C_train, C_dev, C_test, char_embedd_table = generate_character_data(word_sentences_train, word_sentences_dev,
+                                                                        word_sentences_test, max_length)
+
+    return X_train, POS_train, Head_train, Type_train, mask_train, \
+           X_dev, POS_dev, Head_dev, Type_dev, mask_dev, \
+           X_test, POS_test, Head_test, Type_test, mask_test, \
+           embedd_table, word_alphabet, pos_alphabet, type_alphabet, \
+           C_train, C_dev, C_test, char_embedd_table

@@ -328,8 +328,8 @@ def decode_MST(energies, masks):
         while length < max_length and mask[length] == 1:
             length += 1
 
-        # calc real energy matrix shape = [length, length, num_labels].
-        energy = energy[:length, :length, :]
+        # calc real energy matrix shape = [length, length, num_labels - 1] (remove the label for root symbol).
+        energy = energy[:length, :length, 1:]
         # get best label for each edge.
         label_id_matrix = energy.argmax(axis=2)
         # get original score matrix
