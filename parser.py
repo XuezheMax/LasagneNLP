@@ -319,3 +319,7 @@ def main():
                     pos_alphabet, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
+
+
+if __name__ == '__main__':
+    main()

@@ -156,6 +156,15 @@ def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_co
                     if len(words) != 0:
                         logger.info("ignore sentence with length %d" % (len(words)))
 
+                words = []
+                poss = []
+                heads = []
+                types = []
+
+                word_ids = []
+                pos_ids = []
+                type_ids = []
+
                 words.append(root_symbol)
                 poss.append(root_symbol)
                 heads.append(-1)
@@ -584,17 +593,17 @@ def load_dataset_parsing(train_path, dev_path, test_path, word_column=1, pos_col
                                                                        logger)
     logger.info("Dimension of embedding is %d, Caseless: %d" % (embedd_dim, caseless))
     # fill data tensor (X.shape = [#data, max_length], {POS, Head, Type}.shape = [#data, max_length])
-    X_train, POS_train, Head_train, Type_train, mask_train = construct_tensor(word_sentences_train,
+    X_train, POS_train, Head_train, Type_train, mask_train = construct_tensor(word_index_sentences_train,
                                                                               pos_index_sentences_train,
                                                                               head_sentences_train,
                                                                               type_index_sentences_train)
 
-    X_dev, POS_dev, Head_dev, Type_dev, mask_dev = construct_tensor(word_sentences_dev,
+    X_dev, POS_dev, Head_dev, Type_dev, mask_dev = construct_tensor(word_index_sentences_dev,
                                                                     pos_index_sentences_dev,
                                                                     head_sentences_dev,
                                                                     type_index_sentences_dev)
 
-    X_test, POS_test, Head_test, Type_test, mask_test = construct_tensor(word_sentences_test,
+    X_test, POS_test, Head_test, Type_test, mask_test = construct_tensor(word_index_sentences_test,
                                                                          pos_index_sentences_test,
                                                                          head_sentences_test,
                                                                          type_index_sentences_test)
