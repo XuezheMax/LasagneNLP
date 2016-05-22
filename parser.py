@@ -73,7 +73,7 @@ def build_network(mode, input_var, char_input_var, mask_var,
 def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                 X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
                 num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                patience, pos_alphabet, logger):
+                patience, pos_alphabet, tmp_dir, logger):
     logger.info('Performing mode: pos')
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -167,7 +167,7 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
             dev_corr += corr
             dev_total += num
             dev_inst += inputs.shape[0]
-            utils.output_predictions(predictions, targets, masks, 'tmp/dev%d' % epoch, pos_alphabet, is_flattened=False)
+            utils.output_predictions(predictions, targets, masks, tmp_dir + '/dev%d' % epoch, pos_alphabet, is_flattened=False)
 
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_inst, dev_corr, dev_total, dev_corr * 100 / dev_total)
@@ -200,7 +200,7 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
                 test_corr += corr
                 test_total += num
                 test_inst += inputs.shape[0]
-                utils.output_predictions(predictions, targets, masks, 'tmp/test%d' % epoch, pos_alphabet,
+                utils.output_predictions(predictions, targets, masks, tmp_dir + '/test%d' % epoch, pos_alphabet,
                                          is_flattened=False)
 
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
@@ -257,6 +257,7 @@ def main():
     parser.add_argument('--train')
     parser.add_argument('--dev')
     parser.add_argument('--test')
+    parser.add_argument('--tmp')
 
     args = parser.parse_args()
 
@@ -269,6 +270,7 @@ def main():
     train_path = args.train
     dev_path = args.dev
     test_path = args.test
+    tmp_dir = args.tmp
     update_algo = args.update
     grad_clipping = args.grad_clipping
     peepholes = args.peepholes
@@ -317,7 +319,7 @@ def main():
         perform_pos(network, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                     X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
                     num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                    patience, pos_alphabet, logger)
+                    patience, pos_alphabet, tmp_dir, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 
