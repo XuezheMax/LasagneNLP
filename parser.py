@@ -72,8 +72,8 @@ def build_network(mode, input_var, char_input_var, mask_var,
 
 def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                 X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
-                num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, patience,
-                pos_alphabet, logger):
+                num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
+                patience, pos_alphabet, logger):
     logger.info('Performing mode: pos')
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -94,7 +94,6 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
     corr_eval = (corr_eval * mask_var).sum(dtype=theano.config.floatX)
 
     learning_rate = 1.0 if update_algo == 'adadelta' else learning_rate
-    momentum = 0.9
     params = lasagne.layers.get_all_params(layer_crf, trainable=True)
     updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
 
@@ -121,7 +120,7 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
     stop_count = 0
     lr = learning_rate
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f): ' % (epoch, lr, decay_rate)
+        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f, momentum=%.4f): ' % (epoch, lr, decay_rate, momentum)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
@@ -246,6 +245,7 @@ def main():
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
+    parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
@@ -306,6 +306,7 @@ def main():
     batch_size = args.batch_size
     learning_rate = args.learning_rate
     decay_rate = args.decay_rate
+    momentum = args.momentum
     patience = args.patience
 
     network = build_network(mode, input_var, char_input_var, mask_var, max_length, max_char_length, alphabet_size,
@@ -315,8 +316,8 @@ def main():
     if mode == 'pos':
         perform_pos(network, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                     X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
-                    num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, patience,
-                    pos_alphabet, logger)
+                    num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
+                    patience, pos_alphabet, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 
