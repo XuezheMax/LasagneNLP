@@ -141,7 +141,7 @@ def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_co
     with open(path) as file:
         for line in file:
             if line.strip() == "":
-                if 0 < len(words) <= MAX_LENGTH:
+                if 1 < len(words) <= MAX_LENGTH:
                     word_sentences.append(words[:])
                     pos_sentences.append(poss[:])
                     head_sentences.append((heads[:]))
@@ -193,7 +193,7 @@ def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_co
                 pos_ids.append(pos_id)
                 type_ids.append(type_id)
 
-    if 0 < len(words) <= MAX_LENGTH:
+    if 1 < len(words) <= MAX_LENGTH:
         word_sentences.append(words[:])
         pos_sentences.append(poss[:])
         head_sentences.append((heads[:]))
