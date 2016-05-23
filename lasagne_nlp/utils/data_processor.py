@@ -9,7 +9,7 @@ from lasagne_nlp.utils import utils as utils
 root_symbol = "##ROOT##"
 root_label = "<ROOT>"
 word_end = "##WE##"
-MAX_LENGTH = 125
+MAX_LENGTH = 100
 MAX_CHAR_LENGTH = 45
 logger = utils.get_logger("LoadData")
 
