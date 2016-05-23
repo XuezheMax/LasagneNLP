@@ -5,6 +5,7 @@ __author__ = 'max'
 import numpy
 
 import theano
+from theano.tensor import as_tensor_variable
 from theano.gof import Op, Apply
 from theano.tensor.nlinalg import matrix_inverse
 
@@ -19,7 +20,8 @@ class LogAbsDet(Op):
     """
 
     def make_node(self, x):
-        x = theano.tensor.as_tensor_variable(x)
+        x = as_tensor_variable(x)
+        assert x.ndim == 2
         o = theano.tensor.scalar(dtype=x.dtype)
         return Apply(self, [x], [o])
 
@@ -28,7 +30,7 @@ class LogAbsDet(Op):
             (x,) = inputs
             (z,) = outputs
             s = numpy.linalg.svd(x, compute_uv=False)
-            log_abs_det = numpy.sum(numpy.log(numpy.abs(s)), axis=1)
+            log_abs_det = numpy.sum(numpy.log(numpy.abs(s)))
             z[0] = numpy.asarray(log_abs_det, dtype=x.dtype)
         except Exception:
             print('Failed to compute logabsdet of {}.'.format(x))

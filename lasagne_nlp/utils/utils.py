@@ -99,8 +99,10 @@ def load_word_embedding_dict(embedding, embedding_path, word_alphabet, logger, e
 # several changes in the main program, though, and is not demonstrated here.
 
 
-def iterate_minibatches(inputs, targets, masks=None, char_inputs=None, batch_size=10, shuffle=False):
+def iterate_minibatches(inputs, targets, types=None, masks=None, char_inputs=None, batch_size=10, shuffle=False):
     assert len(inputs) == len(targets)
+    if types is not None:
+        assert len(inputs) == len(types)
     if masks is not None:
         assert len(inputs) == len(masks)
     if char_inputs is not None:
@@ -113,8 +115,8 @@ def iterate_minibatches(inputs, targets, masks=None, char_inputs=None, batch_siz
             excerpt = indices[start_idx:start_idx + batch_size]
         else:
             excerpt = slice(start_idx, start_idx + batch_size)
-        yield inputs[excerpt], targets[excerpt], (None if masks is None else masks[excerpt]), \
-              (None if char_inputs is None else char_inputs[excerpt])
+        yield inputs[excerpt], targets[excerpt], (None if types is None else types[excerpt]), \
+              (None if masks is None else masks[excerpt]), (None if char_inputs is None else char_inputs[excerpt])
 
 
 def create_updates(loss, params, update_algo, learning_rate, momentum=None):

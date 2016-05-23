@@ -167,7 +167,8 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
             dev_corr += corr
             dev_total += num
             dev_inst += inputs.shape[0]
-            utils.output_predictions(predictions, targets, masks, tmp_dir + '/dev%d' % epoch, pos_alphabet, is_flattened=False)
+            utils.output_predictions(predictions, targets, masks, tmp_dir + '/dev%d' % epoch, pos_alphabet,
+                                     is_flattened=False)
 
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
             dev_err / dev_inst, dev_corr, dev_total, dev_corr * 100 / dev_total)
@@ -234,6 +235,136 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
         best_acc_test_err / test_inst, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
 
+def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, mask_var,
+                  X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
+                  X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
+                  num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
+                  patience, type_alphabet, tmp_dir, logger):
+    logger.info('Performing mode: parse')
+    # compute loss
+    num_tokens = mask_var.sum(dtype=theano.config.floatX)
+
+    # get outpout of bi-lstm-cnn-crf shape [batch, length, num_labels, num_labels]
+    energies_train = lasagne.layers.get_output(layer_parser)
+    energies_eval = lasagne.layers.get_output(layer_parser, deterministic=True)
+
+    # loss_train = parser_loss(energies_train, head_var, type_var, mask_var).mean()
+    '''
+    loss = parser_loss(energies_train, head_var, type_var, mask_var)
+    train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
+                               [loss, num_tokens], on_unused_input='warn')
+
+    X = X_train[:5]
+    head = Head_train[:5]
+    type = Type_train[:5]
+    mask = mask_train[:5]
+    c = C_train[:5]
+    loss, num = train_fn(X, head, type, mask, c)
+    print loss.shape
+    print loss
+
+    '''
+
+    loss_train = parser_loss(energies_train, head_var, type_var, mask_var).mean()
+    loss_eval = parser_loss(energies_eval, head_var, type_var, mask_var).mean()
+    if regular == 'l2':
+        l2_penalty = lasagne.regularization.regularize_network_params(layer_parser, lasagne.regularization.l2)
+        loss_train = loss_train + gamma * l2_penalty
+
+    learning_rate = 1.0 if update_algo == 'adadelta' else learning_rate
+    params = lasagne.layers.get_all_params(layer_parser, trainable=True)
+    updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
+
+    # Compile a function performing a training step on a mini-batch
+    train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
+                               [loss_train, num_tokens], updates=updates)
+    # Compile a second function evaluating the loss and accuracy of network
+    eval_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
+                              [loss_eval, num_tokens, energies_eval])
+
+    # Finally, launch the training loop.
+    logger.info("Start training: %s with regularization: %s(%f), (#training data: %d, batch size: %d)..." \
+                % (update_algo, regular, (0.0 if regular == 'none' else gamma), num_data, batch_size))
+    num_batches = num_data / batch_size
+    num_epochs = 1000
+
+    best_loss = 1e+12
+    best_uas = 0.0
+    best_las = 0.0
+    best_uas_nopunt = 0.0
+    best_las_nopunt = 0.0
+
+    best_epoch_loss = 0
+    best_epoch_uas = 0
+    best_epoch_las = 0
+    best_epoch_uas_nopunc = 0
+    best_epoch_las_nopunc = 0
+
+    best_loss_test_err = 0.
+    best_loss_test_ucorr = 0.
+    best_loss_test_lcorr = 0.
+    best_loss_test_ucorr_nopunc = 0.
+    best_loss_test_lcorr_nopunc = 0.
+
+    best_uas_test_err = 0.
+    best_uas_test_ucorr = 0.
+    best_uas_test_lcorr = 0.
+    best_uas_test_ucorr_nopunc = 0.
+    best_uas_test_lcorr_nopunc = 0.
+
+    best_las_test_err = 0.
+    best_las_test_ucorr = 0.
+    best_las_test_lcorr = 0.
+    best_las_test_ucorr_nopunc = 0.
+    best_las_test_lcorr_nopunc = 0.
+
+    best_uas_nopunt_test_err = 0.
+    best_uas_nopunt_test_ucorr = 0.
+    best_uas_nopunt_test_lcorr = 0.
+    best_uas_nopunt_test_ucorr_nopunc = 0.
+    best_uas_nopunt_test_lcorr_nopunc = 0.
+
+    best_las_nopunt_test_err = 0.
+    best_las_nopunt_test_ucorr = 0.
+    best_las_nopunt_test_lcorr = 0.
+    best_las_nopunt_test_ucorr_nopunc = 0.
+    best_las_nopunt_test_lcorr_nopunc = 0.
+
+    stop_count = 0
+    lr = learning_rate
+
+    for epoch in range(1, num_epochs + 1):
+        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f, momentum=%.4f): ' % (epoch, lr, decay_rate, momentum)
+        train_err = 0.0
+        train_total = 0
+        train_inst = 0
+        start_time = time.time()
+        num_back = 0
+        train_batches = 0
+        for batch in utils.iterate_minibatches(X_train, Head_train, types=Type_train, masks=mask_train,
+                                               char_inputs=C_train, batch_size=batch_size, shuffle=True):
+            inputs, heads, types, masks, char_inputs = batch
+            err, num = train_fn(inputs, heads, types, masks, char_inputs)
+            train_err += err * inputs.shape[0]
+            train_total += num
+            train_inst += inputs.shape[0]
+            train_batches += 1
+            time_ave = (time.time() - start_time) / train_batches
+            time_left = (num_batches - train_batches) * time_ave
+
+            # update log
+            sys.stdout.write("\b" * num_back)
+            log_info = 'train: %d/%d loss: %.4f, time left (estimated): %.2fs' % (
+                min(train_batches * batch_size, num_data), num_data, train_err / train_inst, time_left)
+            sys.stdout.write(log_info)
+            num_back = len(log_info)
+        # update training log after each epoch
+        assert train_inst == num_data
+        sys.stdout.write("\b" * num_back)
+        print 'train: %d/%d loss: %.4f, time: %.2fs' % (min(train_batches * batch_size, num_data), num_data,
+                                                        train_err / num_data, time.time() - start_time)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Tuning with neural MST parser')
     parser.add_argument('--mode', choices=['pos', 'parse', 'both'], help='mode for tasks', required=True)
@@ -257,7 +388,7 @@ def main():
     parser.add_argument('--train')
     parser.add_argument('--dev')
     parser.add_argument('--test')
-    parser.add_argument('--tmp')
+    parser.add_argument('--tmp', default='tmp', help='Directory for temp files.')
 
     args = parser.parse_args()
 
@@ -320,6 +451,12 @@ def main():
                     X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
                     num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
                     patience, pos_alphabet, tmp_dir, logger)
+    elif mode == 'parse':
+        perform_parse(network, input_var, char_input_var, head_var, type_var, mask_var,
+                    X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
+                    X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
+                    num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
+                    patience, type_alphabet, tmp_dir, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 

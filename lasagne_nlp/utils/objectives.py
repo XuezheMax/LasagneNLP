@@ -31,14 +31,16 @@ def theano_logsumexp(x, axis=None):
     return xmax_ + T.log(T.exp(x - xmax).sum(axis=axis))
 
 
-def parser_loss(energies, targets, masks):
+def parser_loss(energies, heads, types, masks):
     """
     compute minus log likelihood of parser as parser loss.
     :param energies: Theano 4D tensor
         energies of each edge. the shape is [batch_size, n_steps, n_steps, num_labels],
         where the summy root is at index 0.
-    :param targets: Theano 2D tensor
-        targets in the shape [batch_size, n_steps].
+    :param heads: Theano 2D tensor
+        heads in the shape [batch_size, n_steps].
+    :param types: Theano 2D tensor
+        types in the shape [batch_size, n_steps].
     :param masks: Theano 2D tensor
         masks in the shape [batch_size, n_steps].
     :return: Theano 1D tensor
@@ -70,23 +72,24 @@ def parser_loss(energies, targets, masks):
 
     # compute laplacian matrix
     L = D - E
-    # compute minor L[0, 0]
-    L_minor = L[:, 1:, 1:]
+    # compute minor L[0, 0] shape = [batch_size, n-1, n-1]
+    L_minors = L[:, 1:, 1:]
 
     # compute partition Z(x)
-    partition = nlinalg.logabsdet(L_minor)
+    partitions, _ = theano.scan(fn=lambda L_minor: nlinalg.logabsdet(L_minor), outputs_info=None, sequences=L_minors)
+    # partitions = nlinalg.logabsdet(L_minors)
 
     # compute targets energy
     # first create indice matrix
-    indices = T.zeros_like(targets) + T.arange(length).dimshuffle('x', 0)
+    indices = T.zeros_like(heads) + T.arange(length).dimshuffle('x', 0)
     # compute loss matrix shape = [n_steps, batch_size]
-    target_energy = energies[T.arange(batch_size), targets.T, indices.T]
+    target_energy = energies[T.arange(batch_size), heads.T, indices.T, types.T]
     # shuffle loss to [batch_size, n_steps]
     target_energy = target_energy.dimshuffle(1, 0)
     # sum over n_step shape = [batch_size]
     target_energy = target_energy.sum(axis=1)
 
-    return partition - target_energy
+    return partitions - target_energy
 
 
 def crf_loss(energies, targets, masks):
