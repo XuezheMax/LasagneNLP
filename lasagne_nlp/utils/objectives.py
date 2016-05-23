@@ -70,13 +70,16 @@ def parser_loss(energies, heads, types, masks):
     # zeros out all elements except diagonal.
     D = D * T.eye(length, length, 0).dimshuffle('x', 0, 1)
 
+    # compute lengths
+    lengths = T.cast(masks, dtype='int32').sum(axis=1)
     # compute laplacian matrix
     L = D - E
     # compute minor L[0, 0] shape = [batch_size, n-1, n-1]
-    L_minors = L[:, 1:, 1:]
+    # L_minors = L[:, 1:, 1:]
 
     # compute partition Z(x)
-    partitions, _ = theano.scan(fn=lambda L_minor: nlinalg.logabsdet(L_minor), outputs_info=None, sequences=L_minors)
+    partitions, _ = theano.scan(fn=lambda laps, length: nlinalg.logabsdet(laps[1:length, 1:length]), outputs_info=None,
+                                sequences=[L, lengths])
     # partitions = nlinalg.logabsdet(L_minors)
 
     # compute targets energy
