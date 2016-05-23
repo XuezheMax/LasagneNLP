@@ -244,24 +244,26 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
 
-    # get outpout of bi-lstm-cnn-crf shape [batch, length, num_labels, num_labels]
+    # get output of bi-lstm-cnn-crf shape [batch, length, num_labels, num_labels]
     energies_train = lasagne.layers.get_output(layer_parser)
     energies_eval = lasagne.layers.get_output(layer_parser, deterministic=True)
 
-    # loss_train = parser_loss(energies_train, head_var, type_var, mask_var).mean()
     '''
     loss = parser_loss(energies_train, head_var, type_var, mask_var)
     train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
                                [loss, num_tokens], on_unused_input='warn')
 
-    X = X_train[:5]
-    head = Head_train[:5]
-    type = Type_train[:5]
-    mask = mask_train[:5]
-    c = C_train[:5]
+    ss = 30000
+    nn = 10000
+    X = X_train[ss:ss + nn]
+    head = Head_train[ss:ss + nn]
+    type = Type_train[ss:ss + nn]
+    mask = mask_train[ss:ss + nn]
+    c = C_train[ss:ss + nn]
     loss, num = train_fn(X, head, type, mask, c)
     print loss.shape
-    print loss
+    print loss.min()
+    print loss.max()
 
     '''
 
@@ -453,10 +455,10 @@ def main():
                     patience, pos_alphabet, tmp_dir, logger)
     elif mode == 'parse':
         perform_parse(network, input_var, char_input_var, head_var, type_var, mask_var,
-                    X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
-                    X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
-                    num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                    patience, type_alphabet, tmp_dir, logger)
+                      X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
+                      X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
+                      num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
+                      patience, type_alphabet, tmp_dir, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 
