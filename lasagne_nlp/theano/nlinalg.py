@@ -5,7 +5,7 @@ __author__ = 'max'
 import numpy
 
 import theano
-from theano.tensor import as_tensor_variable, clip
+from theano.tensor import as_tensor_variable
 from theano.gof import Op, Apply
 from theano.tensor.nlinalg import matrix_inverse
 
@@ -32,7 +32,7 @@ class LogAbsDet(Op):
             (x,) = inputs
             (z,) = outputs
             s = numpy.linalg.svd(x, compute_uv=False)
-            log_abs_det = clip(numpy.sum(numpy.log(numpy.abs(s))), MIN, MAX)
+            log_abs_det = numpy.sum(numpy.log(numpy.abs(s)))
             z[0] = numpy.asarray(log_abs_det, dtype=x.dtype)
         except Exception:
             print('Failed to compute logabsdet of {}.'.format(x))
