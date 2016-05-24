@@ -33,7 +33,7 @@ class LogAbsDet(Op):
             (z,) = outputs
             s = numpy.linalg.svd(x, compute_uv=False)
             log_abs_det = numpy.sum(numpy.log(numpy.abs(s)))
-            numpy.clip(log_abs_det, MIN, MAX)
+            # numpy.clip(log_abs_det, MIN, MAX)
             z[0] = numpy.asarray(log_abs_det, dtype=x.dtype)
         except Exception:
             print('Failed to compute logabsdet of {}.'.format(x))
