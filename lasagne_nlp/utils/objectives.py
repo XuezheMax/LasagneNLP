@@ -89,6 +89,8 @@ def parser_loss(energies, heads, types, masks):
     target_energy = energies[T.arange(batch_size), heads.T, indices.T, types.T]
     # shuffle loss to [batch_size, n_steps]
     target_energy = target_energy.dimshuffle(1, 0)
+    # remove the first element [batch, n_steps -1]
+    target_energy = target_energy[:, 1:]
     # sum over n_step shape = [batch_size]
     target_energy = target_energy.sum(axis=1)
 

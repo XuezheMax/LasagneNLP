@@ -190,8 +190,8 @@ def eval_parsing(inputs, poss, pars_pred, types_pred, heads, types, masks, filen
             for j in range(1, max_length):
                 if masks[i, j] > 0.:
                     word = word_alphabet.get_instance(inputs[i, j])
-                    pos = pos_alphabet.get_instance(poss[i.j])
-                    type = type_alphabet.get_instance(types_pred[i, j])
+                    pos = pos_alphabet.get_instance(poss[i, j] + 1)
+                    type = type_alphabet.get_instance(types_pred[i, j] + 1)
                     total += 1
                     ucorr += 1 if heads[i, j] == pars_pred[i, j] else 0
                     lcorr += 1 if heads[i, j] == pars_pred[i, j] and types[i, j] == types_pred[i, j] else 0
@@ -402,13 +402,13 @@ def decode_MST(energies, masks):
         final_edges = dict()
         chuLiuEdmonds()
         par = np.zeros([max_length], np.int32)
-        type = np.zeros([max_length], np.int32)
+        type = np.ones([max_length], np.int32)
         type[0] = 0
 
         for ch, pr in final_edges.items():
             par[ch] = pr
             if ch != 0:
-                type[ch] = label_id_matrix[pr, ch]
+                type[ch] = label_id_matrix[pr, ch] + 1
 
         pars[i] = par
         types[i] = type

@@ -405,7 +405,7 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
         dev_inst = 0
 
         for batch in iterate_minibatches(X_dev, pos=POS_dev, heads=Head_dev, types=Type_dev, masks=mask_dev,
-                                         char_inputs=C_dev, batch_size=batch_size, shuffle=True):
+                                         char_inputs=C_dev, batch_size=batch_size):
             inputs, poss, heads, types, masks, char_inputs = batch
             err, num, energies = eval_fn(inputs, heads, types, masks, char_inputs)
             dev_err += err * inputs.shape[0]
@@ -424,11 +424,12 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
             dev_lcorr_nopunc += lcorr_nopunc
             dev_total_nopunc += total_nopunc
 
-        print 'dev loss: %.4f, ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-                dev_err / dev_inst, ucorr, lcorr, total, ucorr / total, lcorr / total)
-        print 'No Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-                ucorr_nopunc, lcorr_nopunc, total_nopunc, ucorr_nopunc / total_nopunc, lcorr_nopunc / total_nopunc)
-
+        print 'dev loss: %.4f' % (dev_err / dev_inst)
+        print 'Wi Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+                dev_ucorr, dev_lcorr, dev_total, dev_ucorr / dev_total, dev_lcorr / dev_total)
+        print 'Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+                dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc / dev_total_nopunc,
+                dev_lcorr_nopunc / dev_total_nopunc)
 
         # re-compile a function with new learning rate for training
         if update_algo != 'adadelta':
@@ -436,7 +437,6 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
             updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
             train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
                                        [loss_train, num_tokens], updates=updates)
-
 
 
 def main():

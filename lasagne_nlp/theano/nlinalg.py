@@ -26,8 +26,8 @@ class LogAbsDet(Op):
         return Apply(self, [x], [o])
 
     def perform(self, node, inputs, outputs, params=None):
-        MAX = 10000.
-        MIN = -10000.
+        # MAX = 10000.
+        # MIN = -10000.
         try:
             (x,) = inputs
             (z,) = outputs
