@@ -66,15 +66,15 @@ def build_network(mode, input_var, char_input_var, mask_var,
         return layer_char_input
 
     def build_network_for_pos():
-        return CRFLayer(bi_lstm_cnn, num_pos, mask_input=layer_mask)
+        return CRFLayer(bi_lstm_cnn, num_pos, mask_input=layer_mask), None, bi_lstm_cnn
 
     def build_network_for_parsing():
-        return DepParserLayer(bi_lstm_cnn, num_types, mask_input=layer_mask)
+        return None, DepParserLayer(bi_lstm_cnn, num_types, mask_input=layer_mask), bi_lstm_cnn
 
     def build_network_for_both():
         layer_crf = CRFLayer(bi_lstm_cnn, num_pos, mask_input=layer_mask, name='crf')
         layer_parser = DepParserLayer(bi_lstm_cnn, num_types, mask_input=layer_mask)
-        return layer_crf, layer_parser
+        return layer_crf, layer_parser, bi_lstm_cnn
 
     # construct input and mask layers
     layer_incoming1 = construct_char_input_layer()
@@ -98,10 +98,36 @@ def build_network(mode, input_var, char_input_var, mask_var,
         raise ValueError('unknown mode: %s' % mode)
 
 
-def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
+def create_updates(loss, layer_top, layer_bottom, learning_rate_top, learning_rate_bottom, momentum, update_algo):
+    params = lasagne.layers.get_all_params(layer_top, trainable=True)
+    if update_algo == 'adadelta':
+        return utils.create_updates(loss, params, update_algo, learning_rate_top, momentum=momentum)
+
+    params_bottom = lasagne.layers.get_all_params(layer_bottom, trainable=True)
+    updates = lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate_top)
+    updates_bottom = lasagne.updates.sgd(loss, params=params_bottom, learning_rate=learning_rate_bottom)
+
+    for param in params_bottom:
+        assert param in updates
+        updates[param] = updates_bottom[param]
+
+    # apply momentum term
+    if update_algo == 'sgd':
+        return updates
+    elif update_algo == 'momentum':
+        updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
+    elif update_algo == 'nesterov':
+        updates = lasagne.updates.apply_nesterov_momentum(updates, momentum=momentum)
+    else:
+        raise ValueError('unkown update algorithm: %s' % update_algo)
+
+    return updates
+
+
+def perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                 X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
-                num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                patience, pos_alphabet, tmp_dir, logger):
+                num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
+                decay_rate_bottom, decay_rate_top, momentum, patience, pos_alphabet, tmp_dir, logger):
     logger.info('Performing mode: pos')
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -121,9 +147,10 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
     prediction_eval, corr_eval = crf_accuracy(energies_eval, pos_var)
     corr_eval = (corr_eval * mask_var).sum(dtype=theano.config.floatX)
 
-    learning_rate = 1.0 if update_algo == 'adadelta' else learning_rate
-    params = lasagne.layers.get_all_params(layer_crf, trainable=True)
-    updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
+    learning_rate_top = 1.0 if update_algo == 'adadelta' else learning_rate_top
+    learning_rate_bottom = 1.0 if update_algo == 'adadelta' else learning_rate_bottom
+    updates = create_updates(loss_train, layer_crf, bi_lstm_cnn, learning_rate_top, learning_rate_bottom, momentum,
+                             update_algo)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, pos_var, mask_var, char_input_var], [loss_train, corr_train, num_tokens],
@@ -146,9 +173,11 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
     best_acc_test_err = 0.
     best_acc_test_corr = 0.
     stop_count = 0
-    lr = learning_rate
+    lr_top = learning_rate_top
+    lr_bottom = learning_rate_bottom
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f, momentum=%.4f): ' % (epoch, lr, decay_rate, momentum)
+        print 'Epoch %d (learning rate=(%.5f, %.5f), decay rate=(%.4f, %.4f), momentum=%.4f): ' % (
+            epoch, lr_bottom, lr_top, decay_rate_bottom, decay_rate_top, momentum)
         train_err = 0.0
         train_corr = 0.0
         train_total = 0
@@ -248,8 +277,9 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
 
         # re-compile a function with new learning rate for training
         if update_algo != 'adadelta':
-            lr = learning_rate / (1.0 + epoch * decay_rate)
-            updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
+            lr_top = learning_rate_top / (1.0 + epoch * decay_rate_top)
+            lr_bottom = learning_rate_bottom / (1.0 + epoch * decay_rate_bottom)
+            updates = create_updates(loss_train, layer_crf, bi_lstm_cnn, lr_top, lr_bottom, momentum, update_algo)
             train_fn = theano.function([input_var, pos_var, mask_var, char_input_var],
                                        [loss_train, corr_train, num_tokens],
                                        updates=updates)
@@ -263,11 +293,12 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
         best_acc_test_err / test_inst, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
 
-def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, mask_var,
+def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var, type_var, mask_var,
                   X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                   X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
-                  num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                  patience, word_alphabet, pos_alphabet, type_alphabet, tmp_dir, punct_set, logger):
+                  num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
+                  decay_rate_bottom, decay_rate_top, momentum, patience, word_alphabet, pos_alphabet, type_alphabet,
+                  tmp_dir, punct_set, logger):
     logger.info('Performing mode: parse')
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -301,9 +332,10 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
         l2_penalty = lasagne.regularization.regularize_network_params(layer_parser, lasagne.regularization.l2)
         loss_train = loss_train + gamma * l2_penalty
 
-    learning_rate = 1.0 if update_algo == 'adadelta' else learning_rate
-    params = lasagne.layers.get_all_params(layer_parser, trainable=True)
-    updates = utils.create_updates(loss_train, params, update_algo, learning_rate, momentum=momentum)
+    learning_rate_top = 1.0 if update_algo == 'adadelta' else learning_rate_top
+    learning_rate_bottom = 1.0 if update_algo == 'adadelta' else learning_rate_bottom
+    updates = create_updates(loss_train, layer_parser, bi_lstm_cnn, learning_rate_top, learning_rate_bottom, momentum,
+                             update_algo)
 
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
@@ -361,10 +393,12 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
     best_las_nopunt_test_lcorr_nopunc = 0.
 
     stop_count = 0
-    lr = learning_rate
+    lr_top = learning_rate_top
+    lr_bottom = learning_rate_bottom
 
     for epoch in range(1, num_epochs + 1):
-        print 'Epoch %d (learning rate=%.4f, decay rate=%.4f, momentum=%.4f): ' % (epoch, lr, decay_rate, momentum)
+        print 'Epoch %d (learning rate=(%.5f, %.5f), decay rate=(%.4f, %.4f), momentum=%.4f): ' % (
+            epoch, lr_bottom, lr_top, decay_rate_bottom, decay_rate_top, momentum)
         train_err = 0.0
         train_total = 0
         train_inst = 0
@@ -426,15 +460,16 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
 
         print 'dev loss: %.4f' % (dev_err / dev_inst)
         print 'Wi Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-                dev_ucorr, dev_lcorr, dev_total, dev_ucorr / dev_total, dev_lcorr / dev_total)
+            dev_ucorr, dev_lcorr, dev_total, dev_ucorr * 100 / dev_total, dev_lcorr * 100 / dev_total)
         print 'Wo Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
-                dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc / dev_total_nopunc,
-                dev_lcorr_nopunc / dev_total_nopunc)
+            dev_ucorr_nopunc, dev_lcorr_nopunc, dev_total_nopunc, dev_ucorr_nopunc * 100 / dev_total_nopunc,
+            dev_lcorr_nopunc * 100 / dev_total_nopunc)
 
         # re-compile a function with new learning rate for training
         if update_algo != 'adadelta':
-            lr = learning_rate / (1.0 + epoch * decay_rate)
-            updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
+            lr_top = learning_rate_top / (1.0 + epoch * decay_rate_top)
+            lr_bottom = learning_rate_bottom / (1.0 + epoch * decay_rate_bottom)
+            updates = create_updates(loss_train, layer_parser, bi_lstm_cnn, lr_top, lr_bottom, momentum, update_algo)
             train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
                                        [loss_train, num_tokens], updates=updates)
 
@@ -448,8 +483,10 @@ def main():
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=200, help='Number of hidden units in LSTM')
     parser.add_argument('--num_filters', type=int, default=30, help='Number of filters in CNN')
-    parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
-    parser.add_argument('--decay_rate', type=float, default=0.05, help='Decay rate of learning rate')
+    parser.add_argument('--learning_rate_bottom', type=float, default=0.01, help='Learning rate for bottom layers')
+    parser.add_argument('--learning_rate_top', type=float, default=0.001, help='Learning rate for top layers')
+    parser.add_argument('--decay_rate_bottom', type=float, default=0.05, help='Decay rate of bottom layers')
+    parser.add_argument('--decay_rate_top', type=float, default=0.05, help='Decay rate of top layers')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
     parser.add_argument('--grad_clipping', type=float, default=0, help='Gradient clipping')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
@@ -517,27 +554,34 @@ def main():
     assert (max_length == max_sent_length)
     assert (num_data == num_data_char)
     batch_size = args.batch_size
-    learning_rate = args.learning_rate
-    decay_rate = args.decay_rate
+    learning_rate_bottom = args.learning_rate_bottom
+    learning_rate_top = args.learning_rate_top
+    decay_rate_bottom = args.decay_rate_bottom
+    decay_rate_top = args.decay_rate_top
     momentum = args.momentum
     patience = args.patience
 
-    network = build_network(mode, input_var, char_input_var, mask_var, max_length, max_char_length, alphabet_size,
-                            char_alphabet_size, embedd_table, embedd_dim, char_embedd_table, char_embedd_dim, num_units,
-                            num_filters, grad_clipping, peepholes, dropout, num_pos, num_types, logger)
+    layer_crf, layer_parser, bi_lstm_cnn = build_network(mode, input_var, char_input_var, mask_var, max_length,
+                                                         max_char_length, alphabet_size,
+                                                         char_alphabet_size, embedd_table, embedd_dim,
+                                                         char_embedd_table, char_embedd_dim, num_units,
+                                                         num_filters, grad_clipping, peepholes, dropout, num_pos,
+                                                         num_types, logger)
 
     if mode == 'pos':
-        perform_pos(network, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
+        perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask_var, X_train, POS_train,
+                    mask_train,
                     X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
-                    num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                    patience, pos_alphabet, tmp_dir, logger)
+                    num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
+                    decay_rate_bottom, decay_rate_top, momentum, patience, pos_alphabet, tmp_dir, logger)
     elif mode == 'parse':
-        perform_parse(network, input_var, char_input_var, head_var, type_var, mask_var,
+        perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var, type_var, mask_var,
                       X_train, POS_train, Head_train, Type_train, mask_train,
                       X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                       X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
-                      num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                      patience, word_alphabet, pos_alphabet, type_alphabet, tmp_dir, punct_set, logger)
+                      num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
+                      decay_rate_bottom, decay_rate_top, momentum, patience, word_alphabet, pos_alphabet, type_alphabet,
+                      tmp_dir, punct_set, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 

@@ -224,6 +224,9 @@ def decode_MST(energies, masks):
         cycle = set()
         findcycle = False
         for i in range(1, length):
+            if findcycle:
+                break
+
             if added[i] or not curr_nodes[i]:
                 continue
 
@@ -234,7 +237,7 @@ def decode_MST(energies, masks):
             findcycle = True
             l = i
 
-            while not par[l] in tmp_cycle:
+            while par[l] not in tmp_cycle:
                 l = par[l]
                 if added[l]:
                     findcycle = False
@@ -257,7 +260,7 @@ def decode_MST(energies, masks):
         par = np.zeros([length], dtype=np.int32)
         # create best graph
         par[0] = -1
-        for i in range(length):
+        for i in range(1, length):
             # only interested at current nodes
             if curr_nodes[i]:
                 max_score = score_matrix[0, i]
@@ -369,7 +372,7 @@ def decode_MST(energies, masks):
 
         # calc the realy length of this instance
         length = 0
-        while length < max_length and mask[length] == 1:
+        while length < max_length and mask[length] > 0.5:
             length += 1
 
         # calc real energy matrix shape = [length, length, num_labels - 1] (remove the label for root symbol).
