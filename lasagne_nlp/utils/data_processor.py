@@ -40,6 +40,7 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
     num_tokens = 0
     with open(path) as file:
         for line in file:
+            line.decode('utf-8')
             if line.strip() == "":
                 if 0 < len(words) <= MAX_LENGTH:
                     word_sentences.append(words[:])
@@ -140,6 +141,7 @@ def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_co
     num_tokens = 0
     with open(path) as file:
         for line in file:
+            line.decode('utf-8')
             if line.strip() == "":
                 if 1 < len(words) <= MAX_LENGTH:
                     word_sentences.append(words[:])

@@ -16,6 +16,34 @@ from lasagne_nlp.networks.networks import build_BiLSTM_CNN
 import numpy as np
 
 
+def iterate_minibatches(inputs, pos=None, heads=None, types=None, masks=None, char_inputs=None, batch_size=10,
+                        shuffle=False):
+    if pos is not None:
+        assert len(inputs) == len(pos)
+    if heads is not None:
+        assert len(inputs) == len(heads)
+    if types is not None:
+        assert len(inputs) == len(types)
+    if masks is not None:
+        assert len(inputs) == len(masks)
+    if char_inputs is not None:
+        assert len(inputs) == len(char_inputs)
+
+    if shuffle:
+        indices = np.arange(len(inputs))
+        np.random.shuffle(indices)
+    for start_idx in range(0, len(inputs), batch_size):
+        if shuffle:
+            excerpt = indices[start_idx:start_idx + batch_size]
+        else:
+            excerpt = slice(start_idx, start_idx + batch_size)
+        yield inputs[excerpt], (None if pos is None else pos[excerpt]), \
+              (None if heads is None else heads[excerpt]), \
+              (None if types is None else types[excerpt]), \
+              (None if masks is None else masks[excerpt]), \
+              (None if char_inputs is None else char_inputs[excerpt])
+
+
 def build_network(mode, input_var, char_input_var, mask_var,
                   max_length, max_char_length, alphabet_size, char_alphabet_size,
                   embedd_table, embedd_dim, char_embedd_table, char_embedd_dim,
@@ -128,10 +156,10 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
         start_time = time.time()
         num_back = 0
         train_batches = 0
-        for batch in utils.iterate_minibatches(X_train, POS_train, masks=mask_train, char_inputs=C_train,
-                                               batch_size=batch_size, shuffle=True):
-            inputs, targets, masks, char_inputs = batch
-            err, corr, num = train_fn(inputs, targets, masks, char_inputs)
+        for batch in iterate_minibatches(X_train, pos=POS_train, masks=mask_train, char_inputs=C_train,
+                                         batch_size=batch_size, shuffle=True):
+            inputs, pos, _, _, masks, char_inputs = batch
+            err, corr, num = train_fn(inputs, pos, masks, char_inputs)
             train_err += err * inputs.shape[0]
             train_corr += corr
             train_total += num
@@ -159,15 +187,15 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
         dev_corr = 0.0
         dev_total = 0
         dev_inst = 0
-        for batch in utils.iterate_minibatches(X_dev, POS_dev, masks=mask_dev, char_inputs=C_dev,
-                                               batch_size=batch_size):
-            inputs, targets, masks, char_inputs = batch
-            err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
+        for batch in iterate_minibatches(X_dev, pos=POS_dev, masks=mask_dev, char_inputs=C_dev,
+                                         batch_size=batch_size):
+            inputs, pos, _, _, masks, char_inputs = batch
+            err, corr, num, predictions = eval_fn(inputs, pos, masks, char_inputs)
             dev_err += err * inputs.shape[0]
             dev_corr += corr
             dev_total += num
             dev_inst += inputs.shape[0]
-            utils.output_predictions(predictions, targets, masks, tmp_dir + '/dev%d' % epoch, pos_alphabet,
+            utils.output_predictions(predictions, pos, masks, tmp_dir + '/dev%d' % epoch, pos_alphabet,
                                      is_flattened=False)
 
         print 'dev loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
@@ -193,15 +221,15 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
             test_corr = 0.0
             test_total = 0
             test_inst = 0
-            for batch in utils.iterate_minibatches(X_test, POS_test, masks=mask_test, char_inputs=C_test,
-                                                   batch_size=batch_size):
-                inputs, targets, masks, char_inputs = batch
-                err, corr, num, predictions = eval_fn(inputs, targets, masks, char_inputs)
+            for batch in iterate_minibatches(X_test, pos=POS_test, masks=mask_test, char_inputs=C_test,
+                                             batch_size=batch_size):
+                inputs, pos, _, _, masks, char_inputs = batch
+                err, corr, num, predictions = eval_fn(inputs, pos, masks, char_inputs)
                 test_err += err * inputs.shape[0]
                 test_corr += corr
                 test_total += num
                 test_inst += inputs.shape[0]
-                utils.output_predictions(predictions, targets, masks, tmp_dir + '/test%d' % epoch, pos_alphabet,
+                utils.output_predictions(predictions, pos, masks, tmp_dir + '/test%d' % epoch, pos_alphabet,
                                          is_flattened=False)
 
             print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
@@ -236,10 +264,10 @@ def perform_pos(layer_crf, input_var, char_input_var, pos_var, mask_var, X_train
 
 
 def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, mask_var,
-                  X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
-                  X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
+                  X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
+                  X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
                   num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                  patience, type_alphabet, tmp_dir, logger):
+                  patience, word_alphabet, pos_alphabet, type_alphabet, tmp_dir, punct_set, logger):
     logger.info('Performing mode: parse')
     # compute loss
     num_tokens = mask_var.sum(dtype=theano.config.floatX)
@@ -343,9 +371,9 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
         start_time = time.time()
         num_back = 0
         train_batches = 0
-        for batch in utils.iterate_minibatches(X_train, Head_train, types=Type_train, masks=mask_train,
-                                               char_inputs=C_train, batch_size=batch_size, shuffle=True):
-            inputs, heads, types, masks, char_inputs = batch
+        for batch in iterate_minibatches(X_train, pos=POS_train, heads=Head_train, types=Type_train, masks=mask_train,
+                                         char_inputs=C_train, batch_size=batch_size, shuffle=True):
+            inputs, _, heads, types, masks, char_inputs = batch
             err, num = train_fn(inputs, heads, types, masks, char_inputs)
             train_err += err * inputs.shape[0]
             train_total += num
@@ -365,6 +393,50 @@ def perform_parse(layer_parser, input_var, char_input_var, head_var, type_var, m
         sys.stdout.write("\b" * num_back)
         print 'train: %d/%d loss: %.4f, time: %.2fs' % (min(train_batches * batch_size, num_data), num_data,
                                                         train_err / num_data, time.time() - start_time)
+
+        # evaluate performance on dev data
+        dev_err = 0.0
+        dev_ucorr = 0.0
+        dev_lcorr = 0.0
+        dev_ucorr_nopunc = 0.0
+        dev_lcorr_nopunc = 0.0
+        dev_total = 0
+        dev_total_nopunc = 0
+        dev_inst = 0
+
+        for batch in iterate_minibatches(X_dev, pos=POS_dev, heads=Head_dev, types=Type_dev, masks=mask_dev,
+                                         char_inputs=C_dev, batch_size=batch_size, shuffle=True):
+            inputs, poss, heads, types, masks, char_inputs = batch
+            err, num, energies = eval_fn(inputs, heads, types, masks, char_inputs)
+            dev_err += err * inputs.shape[0]
+            pars_pred, types_pred = utils.decode_MST(energies, masks)
+            ucorr, lcorr, total, ucorr_nopunc, \
+            lcorr_nopunc, total_nopunc = utils.eval_parsing(inputs, poss, pars_pred, types_pred, heads, types, masks,
+                                                            tmp_dir + '/dev%d' % epoch, word_alphabet, pos_alphabet,
+                                                            type_alphabet, punct_set=punct_set)
+            dev_inst += inputs.shape[0]
+
+            dev_ucorr += ucorr
+            dev_lcorr += lcorr
+            dev_total += total
+
+            dev_ucorr_nopunc += ucorr_nopunc
+            dev_lcorr_nopunc += lcorr_nopunc
+            dev_total_nopunc += total_nopunc
+
+        print 'dev loss: %.4f, ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+                dev_err / dev_inst, ucorr, lcorr, total, ucorr / total, lcorr / total)
+        print 'No Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
+                ucorr_nopunc, lcorr_nopunc, total_nopunc, ucorr_nopunc / total_nopunc, lcorr_nopunc / total_nopunc)
+
+
+        # re-compile a function with new learning rate for training
+        if update_algo != 'adadelta':
+            lr = learning_rate / (1.0 + epoch * decay_rate)
+            updates = utils.create_updates(loss_train, params, update_algo, lr, momentum=momentum)
+            train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
+                                       [loss_train, num_tokens], updates=updates)
+
 
 
 def main():
@@ -387,6 +459,7 @@ def main():
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
     parser.add_argument('--dropout', action='store_true', help='Apply dropout layers')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
+    parser.add_argument('--punctuation', default=None, help='List of punctuations separated by whitespace')
     parser.add_argument('--train')
     parser.add_argument('--dev')
     parser.add_argument('--test')
@@ -411,6 +484,11 @@ def main():
     num_units = args.num_units
     gamma = args.gamma
     dropout = args.dropout
+    punctuation = args.punctuation
+    punct_set = None
+    if punctuation is not None:
+        punct_set = set(punctuation.split())
+        logger.info("punctuations: %s" % ' '.join(punct_set))
 
     X_train, POS_train, Head_train, Type_train, mask_train, \
     X_dev, POS_dev, Head_dev, Type_dev, mask_dev, \
@@ -455,10 +533,11 @@ def main():
                     patience, pos_alphabet, tmp_dir, logger)
     elif mode == 'parse':
         perform_parse(network, input_var, char_input_var, head_var, type_var, mask_var,
-                      X_train, Head_train, Type_train, mask_train, X_dev, Head_dev, Type_dev, mask_dev,
-                      X_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
+                      X_train, POS_train, Head_train, Type_train, mask_train,
+                      X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
+                      X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
                       num_data, batch_size, regular, gamma, update_algo, learning_rate, decay_rate, momentum,
-                      patience, type_alphabet, tmp_dir, logger)
+                      patience, word_alphabet, pos_alphabet, type_alphabet, tmp_dir, punct_set, logger)
     else:
         raise ValueError('unknown mode: %s' % mode)
 

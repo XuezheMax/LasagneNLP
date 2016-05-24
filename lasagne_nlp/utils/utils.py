@@ -2,6 +2,7 @@ __author__ = 'max'
 
 import logging
 import sys
+import re
 import numpy as np
 import lasagne
 from gensim.models.word2vec import Word2Vec
@@ -99,10 +100,8 @@ def load_word_embedding_dict(embedding, embedding_path, word_alphabet, logger, e
 # several changes in the main program, though, and is not demonstrated here.
 
 
-def iterate_minibatches(inputs, targets, types=None, masks=None, char_inputs=None, batch_size=10, shuffle=False):
+def iterate_minibatches(inputs, targets, masks=None, char_inputs=None, batch_size=10, shuffle=False):
     assert len(inputs) == len(targets)
-    if types is not None:
-        assert len(inputs) == len(types)
     if masks is not None:
         assert len(inputs) == len(masks)
     if char_inputs is not None:
@@ -115,8 +114,8 @@ def iterate_minibatches(inputs, targets, types=None, masks=None, char_inputs=Non
             excerpt = indices[start_idx:start_idx + batch_size]
         else:
             excerpt = slice(start_idx, start_idx + batch_size)
-        yield inputs[excerpt], targets[excerpt], (None if types is None else types[excerpt]), \
-              (None if masks is None else masks[excerpt]), (None if char_inputs is None else char_inputs[excerpt])
+        yield inputs[excerpt], targets[excerpt], (None if masks is None else masks[excerpt]), \
+              (None if char_inputs is None else char_inputs[excerpt])
 
 
 def create_updates(loss, params, update_algo, learning_rate, momentum=None):
@@ -163,6 +162,49 @@ def output_predictions(predictions, targets, masks, filename, label_alphabet, is
                     file.write('_ %s %s\n' % (label_alphabet.get_instance(targets[i, j] + 1),
                                               label_alphabet.get_instance(prediction)))
             file.write('\n')
+
+
+def is_uni_punctuation(word):
+    match = re.match("^[^\w\s]+$]", word, flags=re.UNICODE)
+    return match is not None
+
+
+def is_punctuation(word, pos, punct_set=None):
+    if punct_set is None:
+        return is_uni_punctuation(word)
+    else:
+        return pos in punct_set
+
+
+def eval_parsing(inputs, poss, pars_pred, types_pred, heads, types, masks, filename, word_alphabet, pos_alphabet,
+                 type_alphabet, punct_set=None):
+    batch_size, max_length = inputs.shape
+    ucorr = 0.
+    lcorr = 0.
+    total = 0.
+    ucorr_nopunc = 0.
+    lcorr_nopunc = 0.
+    total_nopunc = 0.
+    with open(filename, 'a') as file:
+        for i in range(batch_size):
+            for j in range(1, max_length):
+                if masks[i, j] > 0.:
+                    word = word_alphabet.get_instance(inputs[i, j])
+                    pos = pos_alphabet.get_instance(poss[i.j])
+                    type = type_alphabet.get_instance(types_pred[i, j])
+                    total += 1
+                    ucorr += 1 if heads[i, j] == pars_pred[i, j] else 0
+                    lcorr += 1 if heads[i, j] == pars_pred[i, j] and types[i, j] == types_pred[i, j] else 0
+
+                    if not is_punctuation(word, pos, punct_set):
+                        total_nopunc += 1
+                        ucorr_nopunc += 1 if heads[i, j] == pars_pred[i, j] else 0
+                        lcorr_nopunc += 1 if heads[i, j] == pars_pred[i, j] and types[i, j] == types_pred[i, j] else 0
+
+                    file.write('%d\t%s\t_\t_\t%s\t_\t%d\t%s\n' % (
+                                j, word.encode('utf8'), pos.encode('utf8'), pars_pred[i, j], type.encode('utf8')))
+            file.write('\n')
+    return ucorr, lcorr, total, ucorr_nopunc, lcorr_nopunc, total_nopunc
 
 
 def decode_MST(energies, masks):
