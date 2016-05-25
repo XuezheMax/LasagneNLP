@@ -2,6 +2,7 @@ __author__ = 'max'
 
 import time
 import sys
+import os
 import argparse
 from lasagne_nlp.utils import utils
 import lasagne_nlp.utils.data_processor as data_processor
@@ -457,6 +458,16 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
             dev_ucorr_nopunc += ucorr_nopunc
             dev_lcorr_nopunc += lcorr_nopunc
             dev_total_nopunc += total_nopunc
+
+            # if epoch > 10:
+            #     np.set_printoptions(threshold=np.nan)
+            #     length = masks[0].sum()
+            #     energy = energies[0]
+            #     print length
+            #     print energy[:length, :length, 1:].max(axis=2)
+            #     print pars_pred[0, :length]
+            #     print heads[0, :length]
+            #     raw_input()
 
         print 'dev loss: %.4f' % (dev_err / dev_inst)
         print 'Wi Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (

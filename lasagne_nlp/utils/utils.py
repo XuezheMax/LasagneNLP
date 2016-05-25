@@ -354,7 +354,7 @@ def decode_MST(energies, masks):
                 break
 
         l = par[wh]
-        while l != par[wh]:
+        while l != wh:
             ch = oldO[par[l], l]
             pr = oldI[par[l], l]
             final_edges[ch] = pr
