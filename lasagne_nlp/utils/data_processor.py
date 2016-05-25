@@ -89,7 +89,7 @@ def read_conll_sequence_labeling(path, word_alphabet, label_alphabet, word_colum
     return word_sentences, label_sentences, word_index_sentences, label_index_sentences
 
 
-def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_column=4, pos_column=4, head_column=6,
+def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_column=1, pos_column=4, head_column=6,
                        type_column=7):
     """
     read data from conll format for parsing
