@@ -471,20 +471,20 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
             dev_lcorr_nopunc += lcorr_nopunc
             dev_total_nopunc += total_nopunc
 
-            np.set_printoptions(linewidth=np.nan, threshold=np.nan)
-            length = masks[0].sum()
-            energy = energies[0]
-            energy = energy[:length, :length, 1:].max(axis=2)
-            weight_pred = 0.0
-            weight_gold = 0.0
-            for ch in range(1, length):
-                weight_pred += energy[pars_pred[0, ch], ch]
-                weight_gold += energy[heads[0, ch], ch]
-            print length
-            print energy
-            print pars_pred[0, :length], weight_pred
-            print heads[0, :length], weight_gold
-            raw_input()
+            # np.set_printoptions(linewidth=np.nan, threshold=np.nan)
+            # length = masks[0].sum()
+            # energy = energies[0]
+            # energy = energy[:length, :length, 1:].max(axis=2)
+            # weight_pred = 0.0
+            # weight_gold = 0.0
+            # for ch in range(1, length):
+            #     weight_pred += energy[pars_pred[0, ch], ch]
+            #     weight_gold += energy[heads[0, ch], ch]
+            # print length
+            # print energy
+            # print pars_pred[0, :length], weight_pred
+            # print heads[0, :length], weight_gold
+            # raw_input()
 
         print 'dev loss: %.4f' % (dev_err / dev_inst)
         print 'Wi Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
