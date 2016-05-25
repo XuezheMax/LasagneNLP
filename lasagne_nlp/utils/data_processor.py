@@ -495,7 +495,7 @@ def load_dataset_sequence_labeling(train_path, dev_path, test_path, word_column=
         return generate_dataset_not_fine_tune()
 
 
-def load_dataset_parsing(train_path, dev_path, test_path, word_column=1, pos_column=4, head_column=6, type_column=7,
+def load_dataset_parsing(train_path, dev_path, test_path, word_column=4, pos_column=4, head_column=6, type_column=7,
                          embedding="word2Vec", embedding_path=None):
     """
 
