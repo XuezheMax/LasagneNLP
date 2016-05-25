@@ -180,7 +180,8 @@ def read_conll_parsing(path, word_alphabet, pos_alphabet, type_alphabet, word_co
                 word = tokens[word_column]
                 pos = tokens[pos_column]
                 head = int(tokens[head_column])
-                type = tokens[type_column]
+                # type = tokens[type_column]
+                type = 'dep'
 
                 words.append(word)
                 poss.append(pos)
