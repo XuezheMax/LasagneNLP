@@ -64,9 +64,9 @@ def parser_loss(energies, heads, types, masks):
     # the shape is [batch_size, n, n]
     D = E.sum(axis=1)
     # ones out the elements out the length of each sentence.
-    D += 1 - masks
+    # D += 1 - masks
     # D = diag(D)
-    D = D.dimshuffle(0, 1, 'x') + T.zeros_like(E)
+    D = T.zeros_like(E) + D.dimshuffle(0, 1, 'x')
     # zeros out all elements except diagonal.
     D = D * T.eye(length, length, 0).dimshuffle('x', 0, 1)
 
@@ -80,7 +80,6 @@ def parser_loss(energies, heads, types, masks):
     # compute partition Z(x)
     partitions, _ = theano.scan(fn=lambda laps, length: nlinalg.logabsdet(laps[1:length, 1:length]), outputs_info=None,
                                 sequences=[L, lengths])
-    # partitions = nlinalg.logabsdet(L_minors)
 
     # compute targets energy
     # first create indice matrix
@@ -94,7 +93,7 @@ def parser_loss(energies, heads, types, masks):
     # sum over n_step shape = [batch_size]
     target_energy = target_energy.sum(axis=1)
 
-    return partitions - target_energy
+    return partitions - target_energy#, E, D, L, partitions, target_energy
 
 
 def crf_loss(energies, targets, masks):
