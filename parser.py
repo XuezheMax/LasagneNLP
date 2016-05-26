@@ -13,7 +13,7 @@ from lasagne_nlp.networks.parser import DepParserLayer
 import lasagne
 import theano
 import theano.tensor as T
-from lasagne_nlp.networks.networks import build_BiLSTM_CNN
+from lasagne_nlp.networks.networks import build_BiLSTM_CNN, build_BiGRU_CNN
 
 import numpy as np
 
@@ -323,7 +323,8 @@ def iterate_minibatches(inputs, pos=None, heads=None, types=None, masks=None, ch
 def build_network(mode, input_var, char_input_var, mask_var,
                   max_length, max_char_length, alphabet_size, char_alphabet_size,
                   embedd_table, embedd_dim, char_embedd_table, char_embedd_dim,
-                  num_units, num_filters, grad_clipping, peepholes, dropout, num_pos, num_types, logger):
+                  num_units, num_filters, grad_clipping, peepholes, dropout, num_pos, num_types,
+                  rnn, in_to_out, logger):
     def construct_input_layer():
         layer_input = lasagne.layers.InputLayer(shape=(None, max_length), input_var=input_var, name='input')
         layer_embedding = lasagne.layers.EmbeddingLayer(layer_input, input_size=alphabet_size,
@@ -342,15 +343,15 @@ def build_network(mode, input_var, char_input_var, mask_var,
         return layer_char_input
 
     def build_network_for_pos():
-        return CRFLayer(bi_lstm_cnn, num_pos, mask_input=layer_mask, name='crf'), None, bi_lstm_cnn
+        return CRFLayer(layer_bottom, num_pos, mask_input=layer_mask, name='crf'), None, layer_bottom
 
     def build_network_for_parsing():
-        return None, DepParserLayer(bi_lstm_cnn, num_types, mask_input=layer_mask, name='parser'), bi_lstm_cnn
+        return None, DepParserLayer(layer_bottom, num_types, mask_input=layer_mask, name='parser'), layer_bottom
 
     def build_network_for_both():
-        layer_crf = CRFLayer(bi_lstm_cnn, num_pos, mask_input=layer_mask, name='crf')
-        layer_parser = DepParserLayer(bi_lstm_cnn, num_types, mask_input=layer_mask, name='parser')
-        return layer_crf, layer_parser, bi_lstm_cnn
+        layer_crf = CRFLayer(layer_bottom, num_pos, mask_input=layer_mask, name='crf')
+        layer_parser = DepParserLayer(layer_bottom, num_types, mask_input=layer_mask, name='parser')
+        return layer_crf, layer_parser, layer_bottom
 
     # construct input and mask layers
     layer_incoming1 = construct_char_input_layer()
@@ -358,9 +359,17 @@ def build_network(mode, input_var, char_input_var, mask_var,
 
     layer_mask = lasagne.layers.InputLayer(shape=(None, max_length), input_var=mask_var, name='mask')
 
-    bi_lstm_cnn = build_BiLSTM_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
-                                   grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
-                                   dropout=dropout)
+    if rnn == 'LSTM':
+        layer_bottom = build_BiLSTM_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
+                                        grad_clipping=grad_clipping, peepholes=peepholes, num_filters=num_filters,
+                                        dropout=dropout, in_to_out=in_to_out)
+    elif rnn == 'GRU':
+        layer_bottom = build_BiGRU_CNN(layer_incoming1, layer_incoming2, num_units, mask=layer_mask,
+                                       grad_clipping=grad_clipping, num_filters=num_filters,
+                                       dropout=dropout, in_to_out=in_to_out)
+    else:
+        raise ValueError('unknown rnn type: %s' % rnn)
+
     if mode == 'pos':
         return build_network_for_pos()
     elif mode == 'parse':
@@ -422,7 +431,7 @@ def create_updates(loss, layer_top, layer_bottom, learning_rate_top, learning_ra
     return updates
 
 
-def perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
+def perform_pos(layer_crf, layer_bottom, input_var, char_input_var, pos_var, mask_var, X_train, POS_train, mask_train,
                 X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
                 num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
                 decay_rate_bottom, decay_rate_top, momentum, grad_clipping, max_norm, patience, word_alphabet,
@@ -447,7 +456,7 @@ def perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask
 
     learning_rate_top = 1.0 if update_algo == 'adadelta' else learning_rate_top
     learning_rate_bottom = 1.0 if update_algo == 'adadelta' else learning_rate_bottom
-    updates = create_updates(loss_train, layer_crf, bi_lstm_cnn, learning_rate_top, learning_rate_bottom, momentum,
+    updates = create_updates(loss_train, layer_crf, layer_bottom, learning_rate_top, learning_rate_bottom, momentum,
                              grad_clipping, max_norm, update_algo)
 
     # Compile a function performing a training step on a mini-batch
@@ -577,7 +586,7 @@ def perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask
         if update_algo != 'adadelta':
             lr_top = learning_rate_top / (1.0 + epoch * decay_rate_top)
             lr_bottom = learning_rate_bottom / (1.0 + epoch * decay_rate_bottom)
-            updates = create_updates(loss_train, layer_crf, bi_lstm_cnn, lr_top, lr_bottom, momentum, grad_clipping,
+            updates = create_updates(loss_train, layer_crf, layer_bottom, lr_top, lr_bottom, momentum, grad_clipping,
                                      max_norm, update_algo)
             train_fn = theano.function([input_var, pos_var, mask_var, char_input_var],
                                        [loss_train, corr_train, num_tokens],
@@ -592,7 +601,7 @@ def perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask
         best_acc_test_err / test_inst, best_acc_test_corr, test_total, best_acc_test_corr * 100 / test_total)
 
 
-def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var, type_var, mask_var,
+def perform_parse(layer_parser, layer_bottom, input_var, char_input_var, head_var, type_var, mask_var,
                   X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                   X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
                   num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
@@ -606,30 +615,11 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
     energies_train = lasagne.layers.get_output(layer_parser)
     energies_eval = lasagne.layers.get_output(layer_parser, deterministic=True)
 
-    '''
-    loss = parser_loss(energies_train, head_var, type_var, mask_var)
-    train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
-                               [loss, num_tokens], on_unused_input='warn')
-
-    ss = 30000
-    nn = 10000
-    X = X_train[ss:ss + nn]
-    head = Head_train[ss:ss + nn]
-    type = Type_train[ss:ss + nn]
-    mask = mask_train[ss:ss + nn]
-    c = C_train[ss:ss + nn]
-    loss, num = train_fn(X, head, type, mask, c)
-    print loss.shape
-    print loss.min()
-    print loss.max()
-
-    '''
-
-    # loss_train = parser_loss(energies_train, head_var, type_var, mask_var).mean()
-    # loss_eval = parser_loss(energies_eval, head_var, type_var, mask_var).mean()
-    loss_train, _, _, _, _, _ = parser_loss(energies_train, head_var, type_var, mask_var)
-    loss_eval, E_eval, D_eval, L_eval, partition_eval, target_energy_eval = parser_loss(energies_eval, head_var,
-                                                                                        type_var, mask_var)
+    loss_train = parser_loss(energies_train, head_var, type_var, mask_var).mean()
+    loss_eval = parser_loss(energies_eval, head_var, type_var, mask_var).mean()
+    # loss_train, _, _, _, _, _ = parser_loss(energies_train, head_var, type_var, mask_var)
+    # loss_eval, E_eval, D_eval, L_eval, partition_eval, target_energy_eval = parser_loss(energies_eval, head_var,
+    #                                                                                     type_var, mask_var)
     loss_train = loss_train.mean()
     loss_eval = loss_eval.mean()
 
@@ -639,7 +629,7 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
 
     learning_rate_top = 1.0 if update_algo == 'adadelta' else learning_rate_top
     learning_rate_bottom = 1.0 if update_algo == 'adadelta' else learning_rate_bottom
-    updates = create_updates(loss_train, layer_parser, bi_lstm_cnn, learning_rate_top, learning_rate_bottom, momentum,
+    updates = create_updates(loss_train, layer_parser, layer_bottom, learning_rate_top, learning_rate_bottom, momentum,
                              grad_clipping, max_norm, update_algo)
 
     # Compile a function performing a training step on a mini-batch
@@ -647,8 +637,7 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
                                [loss_train, num_tokens], updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
     eval_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
-                              [loss_eval, num_tokens, energies_eval, E_eval, D_eval, L_eval, partition_eval,
-                               target_energy_eval])
+                              [loss_eval, num_tokens, energies_eval])
 
     # Finally, launch the training loop.
     logger.info("Start training: %s with regularization: %s(%f), (#training data: %d, batch size: %d)..." \
@@ -747,7 +736,7 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
         for batch in iterate_minibatches(X_dev, pos=POS_dev, heads=Head_dev, types=Type_dev, masks=mask_dev,
                                          char_inputs=C_dev, batch_size=batch_size):
             inputs, poss, heads, types, masks, char_inputs = batch
-            err, num, energies, E, D, L, Z, score = eval_fn(inputs, heads, types, masks, char_inputs)
+            err, num, energies = eval_fn(inputs, heads, types, masks, char_inputs)
             dev_err += err * inputs.shape[0]
             pars_pred, types_pred = decode_MST(energies, masks)
             ucorr, lcorr, total, ucorr_nopunc, \
@@ -764,29 +753,29 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
             dev_lcorr_nopunc += lcorr_nopunc
             dev_total_nopunc += total_nopunc
 
-            np.set_printoptions(precision=5, suppress=True, linewidth=np.nan, threshold=np.nan)
-            length = masks[0].sum()
-            print 'E:'
-            print E[0, :length, :length]
-            print 'D:'
-            print D[0, :length, :length]
-            print 'L:'
-            print L[0, :length, :length]
-            print 'Z= %.5f, score= %.5f' % (Z[0], score[0])
-            energy = energies[0]
-            energy_max = energy[:length, :length, 1:].max(axis=2)
-            weight_pred1 = 0.0
-            weight_pred2 = 0.0
-            weight_gold = 0.0
-            for ch in range(1, length):
-                weight_pred1 += energy_max[pars_pred[0, ch], ch]
-                weight_pred2 += energy[pars_pred[0, ch], ch, types_pred[0, ch]]
-                weight_gold += energy[heads[0, ch], ch, types[0, ch]]
-            print length
-            # print energy_max
-            print pars_pred[0, :length], weight_pred1, weight_pred2
-            print heads[0, :length], weight_gold
-            raw_input()
+            # np.set_printoptions(precision=5, suppress=True, linewidth=np.nan, threshold=np.nan)
+            # length = masks[0].sum()
+            # # print 'E:'
+            # # print E[0, :length, :length]
+            # # print 'D:'
+            # # print D[0, :length, :length]
+            # # print 'L:'
+            # # print L[0, :length, :length]
+            # print 'Z= %.5f, score= %.5f' % (Z[0], score[0])
+            # energy = energies[0]
+            # energy_max = energy[:length, :length, 1:].max(axis=2)
+            # weight_pred1 = 0.0
+            # weight_pred2 = 0.0
+            # weight_gold = 0.0
+            # for ch in range(1, length):
+            #     weight_pred1 += energy_max[pars_pred[0, ch], ch]
+            #     weight_pred2 += energy[pars_pred[0, ch], ch, types_pred[0, ch]]
+            #     weight_gold += energy[heads[0, ch], ch, types[0, ch]]
+            # print length
+            # # print energy_max
+            # print pars_pred[0, :length], weight_pred1, weight_pred2
+            # print heads[0, :length], weight_gold, weight_pred1 - weight_gold
+            # # raw_input()
 
         print 'dev loss: %.4f' % (dev_err / dev_inst)
         print 'Wi Punct: ucorr: %d, lcorr: %d, total: %d, uas: %.2f%%, las: %.2f%%' % (
@@ -799,13 +788,13 @@ def perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var
         if update_algo != 'adadelta':
             lr_top = learning_rate_top / (1.0 + epoch * decay_rate_top)
             lr_bottom = learning_rate_bottom / (1.0 + epoch * decay_rate_bottom)
-            updates = create_updates(loss_train, layer_parser, bi_lstm_cnn, lr_top, lr_bottom, momentum, grad_clipping,
+            updates = create_updates(loss_train, layer_parser, layer_bottom, lr_top, lr_bottom, momentum, grad_clipping,
                                      max_norm, update_algo)
             train_fn = theano.function([input_var, head_var, type_var, mask_var, char_input_var],
                                        [loss_train, num_tokens], updates=updates)
 
 
-def perform_both(layer_crf, layer_parser, bi_lstm_cnn, input_var, char_input_var, pos_var, head_var, type_var, mask_var,
+def perform_both(layer_crf, layer_parser, layer_bottom, input_var, char_input_var, pos_var, head_var, type_var, mask_var,
                  X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                  X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
                  num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
@@ -839,7 +828,7 @@ def perform_both(layer_crf, layer_parser, bi_lstm_cnn, input_var, char_input_var
         loss_train = loss_train + gamma * l2_penalty
 
     layer_merge = lasagne.layers.MergeLayer([layer_crf, layer_parser], name='merge')
-    updates = create_updates(loss_train, layer_merge, bi_lstm_cnn, learning_rate_top, learning_rate_bottom, momentum,
+    updates = create_updates(loss_train, layer_merge, layer_bottom, learning_rate_top, learning_rate_bottom, momentum,
                              grad_clipping, max_norm, update_algo)
     # Compile a function performing a training step on a mini-batch
     train_fn = theano.function([input_var, pos_var, head_var, type_var, mask_var, char_input_var],
@@ -952,7 +941,7 @@ def perform_both(layer_crf, layer_parser, bi_lstm_cnn, input_var, char_input_var
         if update_algo != 'adadelta':
             lr_top = learning_rate_top / (1.0 + epoch * decay_rate_top)
             lr_bottom = learning_rate_bottom / (1.0 + epoch * decay_rate_bottom)
-            updates = create_updates(loss_train, layer_merge, bi_lstm_cnn, lr_top, lr_bottom, momentum, grad_clipping,
+            updates = create_updates(loss_train, layer_merge, layer_bottom, lr_top, lr_bottom, momentum, grad_clipping,
                                      max_norm, update_algo)
             train_fn = theano.function([input_var, pos_var, head_var, type_var, mask_var, char_input_var],
                                        [loss_train, loss_train_crf, loss_train_parser, num_tokens], updates=updates)
@@ -963,6 +952,7 @@ def main():
     parser.add_argument('--mode', choices=['pos', 'parse', 'both'], help='mode for tasks', required=True)
     parser.add_argument('--embedding', choices=['word2vec', 'glove', 'senna', 'random'], help='Embedding for words',
                         required=True)
+    parser.add_argument('--rnn', choices=['LSTM', 'GRU'], help='RNN architecture', default='GRU')
     parser.add_argument('--embedding_dict', default=None, help='path for embedding dict')
     parser.add_argument('--batch_size', type=int, default=10, help='Number of sentences in each batch')
     parser.add_argument('--num_units', type=int, default=200, help='Number of hidden units in LSTM')
@@ -976,6 +966,7 @@ def main():
     parser.add_argument('--max_norm', type=float, default=2.0, help='weight for max-norm regularization')
     parser.add_argument('--gamma', type=float, default=1e-6, help='weight for regularization')
     parser.add_argument('--peepholes', action='store_true', help='Peepholes for LSTM')
+    parser.add_argument('--in_to_out', action='store_true', help='input to output')
     parser.add_argument('--update', choices=['sgd', 'momentum', 'nesterov', 'adadelta'], help='update algorithm',
                         default='sgd')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
@@ -993,6 +984,7 @@ def main():
     logger = utils.get_logger("Neural MSTParser")
 
     mode = args.mode
+    rnn = args.rnn
     regular = args.regular
     embedding = args.embedding
     embedding_path = args.embedding_dict
@@ -1004,6 +996,7 @@ def main():
     grad_clipping = args.grad_clipping
     max_norm = args.max_norm
     peepholes = args.peepholes
+    in_to_out = args.in_to_out
     num_filters = args.num_filters
     num_units = args.num_units
     gamma = args.gamma
@@ -1049,25 +1042,25 @@ def main():
     momentum = args.momentum
     patience = args.patience
 
-    layer_crf, layer_parser, bi_lstm_cnn = build_network(mode, input_var, char_input_var, mask_var, max_length,
+    layer_crf, layer_parser, layer_bottom = build_network(mode, input_var, char_input_var, mask_var, max_length,
                                                          max_char_length, alphabet_size,
                                                          char_alphabet_size, embedd_table, embedd_dim,
                                                          char_embedd_table, char_embedd_dim, num_units,
                                                          num_filters, grad_clipping, peepholes, dropout, num_pos,
-                                                         num_types, logger)
+                                                         num_types, rnn, in_to_out, logger)
 
-    logger.info('num_units: %d, num_filters: %d, clip: %.1f, max_norm: %.1f, peepholes: %s' % (
-        num_units, num_filters, grad_clipping, max_norm, peepholes))
+    logger.info('RNN: %s, num_units: %d, num_filters: %d, clip: %.1f, max_norm: %.1f, peepholes: %s, in_to_out: %s' % (
+        rnn, num_units, num_filters, grad_clipping, max_norm, peepholes, in_to_out))
 
     if mode == 'pos':
-        perform_pos(layer_crf, bi_lstm_cnn, input_var, char_input_var, pos_var, mask_var, X_train, POS_train,
+        perform_pos(layer_crf, layer_bottom, input_var, char_input_var, pos_var, mask_var, X_train, POS_train,
                     mask_train,
                     X_dev, POS_dev, mask_dev, X_test, POS_test, mask_test, C_train, C_dev, C_test,
                     num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
                     decay_rate_bottom, decay_rate_top, momentum, grad_clipping, max_norm, patience, word_alphabet,
                     pos_alphabet, tmp_dir, logger)
     elif mode == 'parse':
-        perform_parse(layer_parser, bi_lstm_cnn, input_var, char_input_var, head_var, type_var, mask_var,
+        perform_parse(layer_parser, layer_bottom, input_var, char_input_var, head_var, type_var, mask_var,
                       X_train, POS_train, Head_train, Type_train, mask_train,
                       X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                       X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
@@ -1075,7 +1068,7 @@ def main():
                       decay_rate_bottom, decay_rate_top, momentum, grad_clipping, max_norm, patience, word_alphabet,
                       pos_alphabet, type_alphabet, tmp_dir, punct_set, logger)
     elif mode == 'both':
-        perform_both(layer_crf, layer_parser, bi_lstm_cnn, input_var, char_input_var, pos_var, head_var, type_var,
+        perform_both(layer_crf, layer_parser, layer_bottom, input_var, char_input_var, pos_var, head_var, type_var,
                      mask_var,
                      X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev,
                      mask_dev,

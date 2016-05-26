@@ -63,9 +63,6 @@ def parser_loss(energies, heads, types, masks):
     # compute the D tensor.
     # the shape is [batch_size, n, n]
     D = E.sum(axis=1)
-    # ones out the elements out the length of each sentence.
-    # D += 1 - masks
-    # D = diag(D)
     D = T.zeros_like(E) + D.dimshuffle(0, 1, 'x')
     # zeros out all elements except diagonal.
     D = D * T.eye(length, length, 0).dimshuffle('x', 0, 1)
@@ -74,8 +71,6 @@ def parser_loss(energies, heads, types, masks):
     lengths = T.cast(masks, dtype='int32').sum(axis=1)
     # compute laplacian matrix
     L = D - E
-    # compute minor L[0, 0] shape = [batch_size, n-1, n-1]
-    # L_minors = L[:, 1:, 1:]
 
     # compute partition Z(x)
     partitions, _ = theano.scan(fn=lambda laps, length: nlinalg.logabsdet(laps[1:length, 1:length]), outputs_info=None,
