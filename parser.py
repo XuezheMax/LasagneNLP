@@ -794,7 +794,8 @@ def perform_parse(layer_parser, layer_bottom, input_var, char_input_var, head_va
                                        [loss_train, num_tokens], updates=updates)
 
 
-def perform_both(layer_crf, layer_parser, layer_bottom, input_var, char_input_var, pos_var, head_var, type_var, mask_var,
+def perform_both(layer_crf, layer_parser, layer_bottom, input_var, char_input_var, pos_var, head_var, type_var,
+                 mask_var,
                  X_train, POS_train, Head_train, Type_train, mask_train, X_dev, POS_dev, Head_dev, Type_dev, mask_dev,
                  X_test, POS_test, Head_test, Type_test, mask_test, C_train, C_dev, C_test,
                  num_data, batch_size, regular, gamma, update_algo, learning_rate_bottom, learning_rate_top,
@@ -1043,14 +1044,15 @@ def main():
     patience = args.patience
 
     layer_crf, layer_parser, layer_bottom = build_network(mode, input_var, char_input_var, mask_var, max_length,
-                                                         max_char_length, alphabet_size,
-                                                         char_alphabet_size, embedd_table, embedd_dim,
-                                                         char_embedd_table, char_embedd_dim, num_units,
-                                                         num_filters, grad_clipping, peepholes, dropout, num_pos,
-                                                         num_types, rnn, in_to_out, logger)
+                                                          max_char_length, alphabet_size,
+                                                          char_alphabet_size, embedd_table, embedd_dim,
+                                                          char_embedd_table, char_embedd_dim, num_units,
+                                                          num_filters, grad_clipping, peepholes, dropout, num_pos,
+                                                          num_types, rnn, in_to_out, logger)
 
-    logger.info('RNN: %s, num_units: %d, num_filters: %d, clip: %.1f, max_norm: %.1f, peepholes: %s, in_to_out: %s' % (
-        rnn, num_units, num_filters, grad_clipping, max_norm, peepholes, in_to_out))
+    logger.info(
+        'RNN: %s, num_units: %d, num_filters: %d, clip: %.1f, max_norm: %.1f, dropout: %s peepholes: %s, in_to_out: %s' % (
+            rnn, num_units, num_filters, grad_clipping, max_norm, dropout, peepholes, in_to_out))
 
     if mode == 'pos':
         perform_pos(layer_crf, layer_bottom, input_var, char_input_var, pos_var, mask_var, X_train, POS_train,
