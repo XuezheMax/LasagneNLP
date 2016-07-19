@@ -133,7 +133,8 @@ def main():
     gamma = args.gamma
     delta = args.delta
     mc = args.mc
-    batch_mc = 10
+    batch_mc = 50
+    num_labels = 10
 
     # Load the dataset
     logger.info("Loading data...")
@@ -156,8 +157,8 @@ def main():
     prediction_eval = lasagne.layers.get_output(network, deterministic=True)
     prediction_eval_mc = lasagne.layers.get_output(network)
     # reshape to [mc, batch, num_labels]
-    prediction_eval = prediction_eval.reshape([mc, batch_mc, 10])
-    prediction_eval_mc = prediction_eval_mc.reshape([mc, batch_mc, 10])
+    prediction_eval = prediction_eval.reshape([mc, batch_mc, num_labels])
+    prediction_eval_mc = prediction_eval_mc.reshape([mc, batch_mc, num_labels])
     # calc mean, shape = [batch, num_labels]
     prediction_eval = prediction_eval.mean(axis=0)
     prediction_eval_mc = prediction_eval_mc.mean(axis=0)

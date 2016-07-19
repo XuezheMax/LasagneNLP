@@ -125,6 +125,7 @@ def main():
     parser.add_argument('--gamma', type=float, default=1e-3, help='weight for L-norm regularization')
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
+    parser.add_argument('--mc', type=int, default=100, help='MC sampling size')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
 
     args = parser.parse_args()
@@ -133,6 +134,9 @@ def main():
     regular = args.regular
     gamma = args.gamma
     delta = args.delta
+    mc = args.mc
+    batch_mc = 50
+    num_labels = 100
 
     # Load the dataset
     logger.info("Loading data...")
@@ -140,6 +144,7 @@ def main():
     num_data, _, _, _ = X_train.shape
 
     # Prepare Theano variables for inputs and targets
+    # shape = [batch, 3, 32, 32] for train, [mc * batch, 3, 32, 32] for test
     input_var = T.tensor4('inputs')
     target_var = T.ivector('targets')
 
@@ -150,7 +155,15 @@ def main():
     # get prediction
     prediction_train = lasagne.layers.get_output(network)
     prediction_train_det = lasagne.layers.get_output(network, deterministic=True)
+    # shape = [mc * batch, num_labels]
     prediction_eval = lasagne.layers.get_output(network, deterministic=True)
+    prediction_eval_mc = lasagne.layers.get_output(network)
+    # reshape to [mc, batch, num_labels]
+    prediction_eval = prediction_eval.reshape([mc, batch_mc, num_labels])
+    prediction_eval_mc = prediction_eval_mc.reshape([mc, batch_mc, num_labels])
+    # calc mean, shape = [batch, num_labels]
+    prediction_eval = prediction_eval.mean(axis=0)
+    prediction_eval_mc = prediction_eval_mc.mean(axis=0)
 
     # compute loss
     loss_train_org = lasagne.objectives.categorical_crossentropy(prediction_train, target_var)
@@ -171,6 +184,12 @@ def main():
 
     loss_eval = lasagne.objectives.categorical_crossentropy(prediction_eval, target_var)
     loss_eval = loss_eval.mean()
+    loss_eval_mc = lasagne.objectives.categorical_crossentropy(prediction_eval_mc, target_var)
+    loss_eval_mc = loss_eval_mc.mean()
+
+    loss_test_expect_linear = lasagne.objectives.squared_error(prediction_eval_mc, prediction_eval)
+    loss_test_expect_linear = loss_test_expect_linear.sum(axis=1)
+    loss_test_expect_linear = loss_test_expect_linear.mean()
 
     # calculate number of correct labels
     corr_train = lasagne.objectives.categorical_accuracy(prediction_train, target_var)
@@ -178,6 +197,9 @@ def main():
 
     corr_eval = lasagne.objectives.categorical_accuracy(prediction_eval, target_var)
     corr_eval = corr_eval.sum(dtype=theano.config.floatX)
+
+    corr_eval_mc = lasagne.objectives.categorical_accuracy(prediction_eval_mc, target_var)
+    corr_eval_mc = corr_eval_mc.sum(dtype=theano.config.floatX)
 
     # Create update expressions for training.
     batch_size = args.batch_size
@@ -198,7 +220,8 @@ def main():
     train_fn = theano.function([input_var, target_var],
                                [loss_train, loss_train_org, loss_train_expect_linear, corr_train], updates=updates)
     # Compile a second function evaluating the loss and accuracy of network
-    eval_fn = theano.function([input_var, target_var], [loss_eval, corr_eval])
+    eval_fn = theano.function([input_var, target_var],
+                              [loss_eval, loss_eval_mc, loss_test_expect_linear, corr_eval, corr_eval_mc])
 
     logger.info(
         "Start training with regularization: %s(%f), max-norm(%.1f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
@@ -213,7 +236,10 @@ def main():
     patience = args.patience
     best_test_epoch = 0
     best_test_err = 0.
+    best_test_err_mc = 0.
+    best_test_err_linear = 0.
     best_test_corr = 0.
+    best_test_corr_mc = 0.
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=(%.5f, %.5f), decay rate=(%.4f, %.4f), momentum=%.4f, increase rate=%.4f): ' % (
             epoch, lr_cnn, lr_dense, decay_rate_cnn, decay_rate_dense, momentum, momentum_increase_rate)
@@ -255,24 +281,39 @@ def main():
 
         # evaluate on test data
         test_err = 0.0
+        test_err_mc = 0.0
+        test_err_linear = 0.0
         test_corr = 0.0
+        test_corr_mc = 0.0
         test_inst = 0
         for batch in iterate_minibatches(X_test, y_test, batch_size):
             inputs, targets = batch
-            err, corr = eval_fn(inputs, targets)
+            inputs_mc = np.empty((mc,) + inputs.shape, dtype=theano.config.floatX)
+            inputs_mc[np.arange(mc)] = inputs
+            inputs_mc = inputs_mc.reshape([mc * batch_mc, 3, 32, 32])
+
+            err, err_mc, err_linear, corr, corr_mc = eval_fn(inputs_mc, targets)
             test_err += err * inputs.shape[0]
+            test_err_mc += err_mc * inputs.shape[0]
+            test_err_linear += err_linear * inputs.shape[0]
             test_corr += corr
+            test_corr_mc += corr_mc
             test_inst += inputs.shape[0]
 
         if best_test_corr < test_corr:
             best_test_epoch = epoch
             best_test_corr = test_corr
+            best_test_corr_mc = test_corr_mc
             best_test_err = test_err
+            best_test_err_mc = test_err_mc
+            best_test_err_linear = test_err_linear
 
-        print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-            test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
-        print 'best test loss: %.4f, corr: %d, total: %d, acc: %.2f%% (epoch: %d)' % (
-            best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst, best_test_epoch)
+        print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
+            test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
+            test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst)
+        print 'best test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%% (epoch: %d)' % (
+            best_test_err / test_inst, best_test_err_mc / test_inst, best_test_err_linear / test_inst, best_test_corr,
+            best_test_corr_mc, test_inst, best_test_corr * 100 / test_inst, best_test_corr_mc * 100 / test_inst, best_test_epoch)
 
         # re-compile a function with new learning rate for training
         lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate_cnn)
@@ -292,11 +333,13 @@ def main():
 
     # print last and best performance on test data.
     logger.info("final test performance (at epoch %d)" % num_epochs)
-    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-        test_err / test_inst, test_corr, test_inst, test_corr * 100 / test_inst)
+    print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
+        test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
+        test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst)
     logger.info("final best acc test performance (at epoch %d)" % best_test_epoch)
-    print 'test loss: %.4f, corr: %d, total: %d, acc: %.2f%%' % (
-        best_test_err / test_inst, best_test_corr, test_inst, best_test_corr * 100 / test_inst)
+    print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
+        best_test_err / test_inst, best_test_err_mc / test_inst, best_test_err_linear / test_inst, best_test_corr,
+        best_test_corr_mc, test_inst, best_test_corr * 100 / test_inst, best_test_corr_mc * 100 / test_inst)
 
 
 if __name__ == '__main__':
