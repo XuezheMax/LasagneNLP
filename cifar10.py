@@ -133,7 +133,7 @@ def main():
     gamma = args.gamma
     delta = args.delta
     mc = args.mc
-    batch_size = args.batch_size
+    batch_mc = 10
 
     # Load the dataset
     logger.info("Loading data...")
@@ -156,8 +156,8 @@ def main():
     prediction_eval = lasagne.layers.get_output(network, deterministic=True)
     prediction_eval_mc = lasagne.layers.get_output(network)
     # reshape to [mc, batch, num_labels]
-    prediction_eval = prediction_eval.reshape([mc, batch_size, 10])
-    prediction_eval_mc = prediction_eval_mc.reshape([mc, batch_size, 10])
+    prediction_eval = prediction_eval.reshape([mc, batch_mc, 10])
+    prediction_eval_mc = prediction_eval_mc.reshape([mc, batch_mc, 10])
     # calc mean, shape = [batch, num_labels]
     prediction_eval = prediction_eval.mean(axis=0)
     prediction_eval_mc = prediction_eval_mc.mean(axis=0)
@@ -200,6 +200,7 @@ def main():
 
     # Create update expressions for training.
     num_epochs = args.num_epochs
+    batch_size = args.batch_size
     # learning_rate = 1.0 if update_algo == 'adadelta' else args.learning_rate
     learning_rate_cnn = args.learning_rate_cnn
     learning_rate_dense = args.learning_rate_dense
@@ -279,7 +280,6 @@ def main():
         test_corr = 0.0
         test_corr_mc = 0.0
         test_inst = 0
-        batch_mc = 10
         for batch in iterate_minibatches(X_test, y_test, batch_mc):
             inputs, targets = batch
             inputs_mc = np.empty((mc,) + inputs.shape, dtype=theano.config.floatX)
