@@ -279,11 +279,12 @@ def main():
         test_corr = 0.0
         test_corr_mc = 0.0
         test_inst = 0
-        for batch in iterate_minibatches(X_test, y_test, batch_size):
+        batch_mc = 10
+        for batch in iterate_minibatches(X_test, y_test, batch_mc):
             inputs, targets = batch
             inputs_mc = np.empty((mc,) + inputs.shape, dtype=theano.config.floatX)
             inputs_mc[np.arange(mc)] = inputs
-            inputs_mc = inputs_mc.reshape([mc * batch_size, 3, 32, 32])
+            inputs_mc = inputs_mc.reshape([mc * batch_mc, 3, 32, 32])
 
             err, err_mc, err_linear, corr, corr_mc = eval_fn(inputs_mc, targets)
             test_err += err * inputs.shape[0]
