@@ -320,9 +320,9 @@ def main():
             best_test_err_linear = test_err_linear
 
         sys.stdout.write("\b" * num_back)
-        print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
+        print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%, time: %.2fs' % (
             test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
-            test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst)
+            test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst, time.time() - start_time)
         print 'best test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%% (epoch: %d)' % (
             best_test_err / test_inst, best_test_err_mc / test_inst, best_test_err_linear / test_inst, best_test_corr,
             best_test_corr_mc, test_inst, best_test_corr * 100 / test_inst, best_test_corr_mc * 100 / test_inst, best_test_epoch)
