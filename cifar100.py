@@ -286,7 +286,7 @@ def main():
         test_corr = 0.0
         test_corr_mc = 0.0
         test_inst = 0
-        for batch in iterate_minibatches(X_test, y_test, batch_size):
+        for batch in iterate_minibatches(X_test, y_test, batch_mc):
             inputs, targets = batch
             inputs_mc = np.empty((mc,) + inputs.shape, dtype=theano.config.floatX)
             inputs_mc[np.arange(mc)] = inputs
