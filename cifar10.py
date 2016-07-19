@@ -306,7 +306,8 @@ def main():
             time_left = (num_batches_test - test_batches) * time_ave
             # update log
             sys.stdout.write("\b" * num_back)
-            log_info = 'test: %d/%d time left (estimated): %.2fs' % (min(test_batches * batch_mc, num_data_test), time_left)
+            log_info = 'test: %d/%d time left (estimated): %.2fs' % (min(test_batches * batch_mc, num_data_test),
+                                                                     num_data_test, time_left)
             sys.stdout.write(log_info)
             num_back = len(log_info)
 
