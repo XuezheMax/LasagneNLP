@@ -307,7 +307,7 @@ def main():
             test_inst += inputs.shape[0]
 
             test_batches += 1
-            time_ave = (time.time() - start_time) / train_batches
+            time_ave = (time.time() - start_time) / test_batches
             time_left = (num_batches_test - test_batches) * time_ave
             # update log
             sys.stdout.write("\b" * num_back)
