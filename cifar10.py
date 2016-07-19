@@ -124,6 +124,7 @@ def main():
     parser.add_argument('--delta', type=float, default=0.0, help='weight for expectation-linear regularization')
     parser.add_argument('--regular', choices=['none', 'l2'], help='regularization for training', required=True)
     parser.add_argument('--mc', type=int, default=100, help='MC sampling size')
+    parser.add_argument('--batch_mc', type=int, default=50, help='Number of instances in each batch for MC')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
 
     args = parser.parse_args()
@@ -133,13 +134,14 @@ def main():
     gamma = args.gamma
     delta = args.delta
     mc = args.mc
-    batch_mc = 50
+    batch_mc = args.batch_mc
     num_labels = 10
 
     # Load the dataset
     logger.info("Loading data...")
     X_train, y_train, X_test, y_test = load_dataset_wo_val()
     num_data, _, _, _ = X_train.shape
+    num_data_test, _, _, _ = X_test.shape
 
     # Prepare Theano variables for inputs and targets
     # shape = [batch, 3, 32, 32] for train, [mc * batch, 3, 32, 32] for test
@@ -224,6 +226,7 @@ def main():
         % (regular, (0.0 if regular == 'none' else gamma), momentum_type, num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
+    num_batches_test = num_data_test / batch_mc
     decay_rate = args.decay_rate
     lr_cnn = learning_rate_cnn
     lr_dense = learning_rate_dense
@@ -281,6 +284,9 @@ def main():
         test_corr = 0.0
         test_corr_mc = 0.0
         test_inst = 0
+        num_back = 0
+        start_time = time.time()
+        test_batches = 0
         for batch in iterate_minibatches(X_test, y_test, batch_mc):
             inputs, targets = batch
             inputs_mc = np.empty((mc,) + inputs.shape, dtype=theano.config.floatX)
@@ -295,6 +301,15 @@ def main():
             test_corr_mc += corr_mc
             test_inst += inputs.shape[0]
 
+            test_batches += 1
+            time_ave = (time.time() - start_time) / train_batches
+            time_left = (num_batches_test - test_batches) * time_ave
+            # update log
+            sys.stdout.write("\b" * num_back)
+            log_info = 'test: %d/%d time left (estimated): %.2fs' % (min(test_batches * batch_mc, num_data_test), time_left)
+            sys.stdout.write(log_info)
+            num_back = len(log_info)
+
         if best_test_corr < test_corr:
             best_test_epoch = epoch
             best_test_corr = test_corr
@@ -303,6 +318,7 @@ def main():
             best_test_err_mc = test_err_mc
             best_test_err_linear = test_err_linear
 
+        sys.stdout.write("\b" * num_back)
         print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
             test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
             test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst)
