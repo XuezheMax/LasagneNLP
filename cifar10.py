@@ -232,12 +232,19 @@ def main():
     lr_dense = learning_rate_dense
     momentum = momentum0
     patience = args.patience
-    best_test_epoch = 0
-    best_test_err = 0.
-    best_test_err_mc = 0.
-    best_test_err_linear = 0.
-    best_test_corr = 0.
-    best_test_corr_mc = 0.
+    best_det_epoch = 0
+    best_det_err = 0.
+    best_det_err_mc = 0.
+    best_det_err_linear = 0.
+    best_det_corr = 0.
+    best_det_corr_mc = 0.
+
+    best_mc_epoch = 0
+    best_mc_err = 0.
+    best_mc_err_mc = 0.
+    best_mc_err_linear = 0.
+    best_mc_corr = 0.
+    best_mc_corr_mc = 0.
     for epoch in range(1, num_epochs + 1):
         print 'Epoch %d (learning rate=(%.4f, %.4f), decay rate=%.4f, momentum=%.4f, increase rate=%.4f): ' % (
             epoch, lr_cnn, lr_dense, decay_rate, momentum, momentum_increase_rate)
@@ -311,21 +318,32 @@ def main():
             sys.stdout.write(log_info)
             num_back = len(log_info)
 
-        if best_test_corr < test_corr:
-            best_test_epoch = epoch
-            best_test_corr = test_corr
-            best_test_corr_mc = test_corr_mc
-            best_test_err = test_err
-            best_test_err_mc = test_err_mc
-            best_test_err_linear = test_err_linear
+        if best_det_corr < test_corr:
+            best_det_epoch = epoch
+            best_det_corr = test_corr
+            best_det_corr_mc = test_corr_mc
+            best_det_err = test_err
+            best_det_err_mc = test_err_mc
+            best_det_err_linear = test_err_linear
+
+        if best_mc_corr < test_corr:
+            best_mc_epoch = epoch
+            best_mc_corr = test_corr
+            best_mc_corr_mc = test_corr_mc
+            best_mc_err = test_err
+            best_mc_err_mc = test_err_mc
+            best_mc_err_linear = test_err_linear
 
         sys.stdout.write("\b" * num_back)
         print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%, time: %.2fs' % (
             test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
             test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst, time.time() - start_time)
-        print 'best test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%% (epoch: %d)' % (
-            best_test_err / test_inst, best_test_err_mc / test_inst, best_test_err_linear / test_inst, best_test_corr,
-            best_test_corr_mc, test_inst, best_test_corr * 100 / test_inst, best_test_corr_mc * 100 / test_inst, best_test_epoch)
+        print 'best det loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%% (epoch: %d)' % (
+            best_det_err / test_inst, best_det_err_mc / test_inst, best_det_err_linear / test_inst, best_det_corr,
+            best_det_corr_mc, test_inst, best_det_corr * 100 / test_inst, best_det_corr_mc * 100 / test_inst, best_det_epoch)
+        print 'best mc  loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%% (epoch: %d)' % (
+            best_mc_err / test_inst, best_mc_err_mc / test_inst, best_mc_err_linear / test_inst, best_mc_corr,
+            best_mc_corr_mc, test_inst, best_mc_corr * 100 / test_inst, best_mc_corr_mc * 100 / test_inst, best_mc_epoch)
 
         # re-compile a function with new learning rate for training
         lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate)
@@ -348,10 +366,14 @@ def main():
     print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
         test_err / test_inst, test_err_mc / test_inst, test_err_linear / test_inst, test_corr, test_corr_mc,
         test_inst, test_corr * 100 / test_inst, test_corr_mc * 100 / test_inst)
-    logger.info("final best acc test performance (at epoch %d)" % best_test_epoch)
+    logger.info("final best det acc test performance (at epoch %d)" % best_det_epoch)
     print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
-        best_test_err / test_inst, best_test_err_mc / test_inst, best_test_err_linear / test_inst, best_test_corr,
-        best_test_corr_mc, test_inst, best_test_corr * 100 / test_inst, best_test_corr_mc * 100 / test_inst)
+        best_det_err / test_inst, best_det_err_mc / test_inst, best_det_err_linear / test_inst, best_det_corr,
+        best_det_corr_mc, test_inst, best_det_corr * 100 / test_inst, best_det_corr_mc * 100 / test_inst)
+    logger.info("final best mc  acc test performance (at epoch %d)" % best_mc_epoch)
+    print 'test loss: %.4f, loss_mc: %.4f, loss_linear: %.4f, corr: %d, corr_mc: %d, total: %d, acc: %.2f%%, acc_mc: %.2f%%' % (
+        best_mc_err / test_inst, best_mc_err_mc / test_inst, best_mc_err_linear / test_inst, best_mc_corr,
+        best_mc_corr_mc, test_inst, best_mc_corr * 100 / test_inst, best_mc_corr_mc * 100 / test_inst)
 
 
 if __name__ == '__main__':
