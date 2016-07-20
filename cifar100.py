@@ -331,7 +331,7 @@ def main():
             best_det_err_mc = test_err_mc
             best_det_err_linear = test_err_linear
 
-        if best_mc_corr_mc < test_corr:
+        if best_mc_corr_mc < test_corr_mc:
             best_mc_epoch = epoch
             best_mc_corr = test_corr
             best_mc_corr_mc = test_corr_mc
