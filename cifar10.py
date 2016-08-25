@@ -91,7 +91,7 @@ def build_dnn(input_var=None):
 def build_allConvB(input_var=None):
     # Input layer and dropout (with shortcut `dropout` for `DropoutLayer`):
     network = lasagne.layers.InputLayer(shape=(None, 3, 32, 32), input_var=input_var)
-    # network = lasagne.layers.dropout(network, p=0.2)
+    network = lasagne.layers.dropout(network, p=0.2)
     # The first CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=96, filter_size=(5, 5), stride=(1, 1), pad='same',
                                          W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
@@ -105,7 +105,7 @@ def build_allConvB(input_var=None):
                                          W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
                                          name='cnn3')
     # Dropout layer
-    # network = lasagne.layers.dropout(network, p=0.5)
+    network = lasagne.layers.dropout(network, p=0.5)
 
     # ------------------------------------------------------------
     # The first CNN layer
@@ -121,7 +121,7 @@ def build_allConvB(input_var=None):
                                          W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
                                          name='cnn6')
     # Dropout layer
-    # network = lasagne.layers.dropout(network, p=0.5)
+    network = lasagne.layers.dropout(network, p=0.5)
 
     # ------------------------------------------------------------
     # The first CNN layer
@@ -232,6 +232,7 @@ def create_updates_allConv(loss, network, learning_rate_cnn, momentum, momentum_
         updates = lasagne.updates.apply_nesterov_momentum(updates, momentum=momentum)
     else:
         raise ValueError('unkown momentum type: %s' % momentum_type)
+    return updates
 
 
 def create_updates(architecture, loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type):
@@ -274,6 +275,7 @@ def main():
     # Load the dataset
     logger.info("Loading data...")
     X_train, y_train, X_test, y_test = load_dataset_wo_val()
+
     num_data, _, _, _ = X_train.shape
     num_data_test, _, _, _ = X_test.shape
 
