@@ -379,8 +379,8 @@ def main():
                               [loss_eval, loss_eval_mc, loss_test_expect_linear, corr_eval, corr_eval_mc])
 
     logger.info(
-        "Start training with regularization: %s(%f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
-        % (regular, (0.0 if regular == 'none' else gamma), momentum_type, num_epochs, num_data, batch_size, delta))
+        "Start training with regularization: %s(%f), opt: %s, momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (regular, (0.0 if regular == 'none' else gamma), opt, momentum_type, num_epochs, num_data, batch_size, delta))
 
     num_batches = num_data / batch_size
     num_batches_test = num_data_test / batch_mc
