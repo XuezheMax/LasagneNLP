@@ -514,7 +514,7 @@ def main():
             best_mc_corr_mc, test_inst, best_mc_corr * 100 / test_inst, best_mc_corr_mc * 100 / test_inst,
             best_mc_epoch)
 
-        if architecture == 'linear':
+        if opt == 'linear':
             # re-compile a function with new learning rate for training
             lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate_cnn)
             lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate_dense)
