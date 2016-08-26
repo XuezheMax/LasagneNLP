@@ -512,8 +512,10 @@ def main():
             train_fn = theano.function([input_var, target_var],
                                        [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
                                        updates=updates)
-        elif epoch in [200, 250, 300]:
-            lr_cnn = lr_cnn * decay_rate
+        elif epoch % 5 == 0:
+            if epoch in [200, 250, 300]:
+                lr_cnn = lr_cnn * decay_rate
+            
             updates = create_updates(architecture, loss_train, network, learning_rate_cnn=lr_cnn,
                                      learning_rate_dense=lr_dense,
                                      momentum=momentum, momentum_type=momentum_type)
