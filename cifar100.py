@@ -199,6 +199,7 @@ def build_allConvC(input_var=None):
 
 
 def create_updates_dnn(loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type, max_norm):
+    # for dnn, only linear patten is valid
     params = lasagne.layers.get_all_params(network, trainable=True)
     params_cnn = utils.get_all_params_by_name(network, ['cnn1.W', 'cnn1.b', 'cnn2.W', 'cnn2.b', 'cnn3.W', 'cnn3.b'],
                                               trainable=True)
@@ -231,31 +232,38 @@ def create_updates_dnn(loss, network, learning_rate_cnn, learning_rate_dense, mo
     return updates
 
 
-def create_updates_allConv(loss, network, learning_rate_cnn, momentum, momentum_type):
+def create_updates_allConv(opt, loss, network, learning_rate_cnn, momentum, momentum_type):
     params = lasagne.layers.get_all_params(network, trainable=True)
-    updates = lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate_cnn)
-    # apply momentum term
-    if momentum_type == 'normal':
-        updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
-    elif momentum_type == 'nesterov':
-        updates = lasagne.updates.apply_nesterov_momentum(updates, momentum=momentum)
+    if opt == 'adam':
+        updates = lasagne.updates.adam(loss, params=params, learning_rate=learning_rate_cnn)
+    elif opt in ['linear', 'schedule']:
+        updates = lasagne.updates.sgd(loss, params=params, learning_rate=learning_rate_cnn)
+        # apply momentum term
+        if momentum_type == 'normal':
+            updates = lasagne.updates.apply_momentum(updates, momentum=momentum)
+        elif momentum_type == 'nesterov':
+            updates = lasagne.updates.apply_nesterov_momentum(updates, momentum=momentum)
+        else:
+            raise ValueError('unkown momentum type: %s' % momentum_type)
     else:
-        raise ValueError('unkown momentum type: %s' % momentum_type)
+        raise ValueError('unkown optimization algorithm: %s' % opt)
     return updates
 
 
-def create_updates(architecture, loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type,
+def create_updates(architecture, opt, loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type,
                    max_norm):
     if architecture == 'dnn':
         return create_updates_dnn(loss, network, learning_rate_cnn, learning_rate_dense, momentum, momentum_type,
                                   max_norm)
     else:
-        return create_updates_allConv(loss, network, learning_rate_cnn, momentum, momentum_type)
+        return create_updates_allConv(opt, loss, network, learning_rate_cnn, momentum, momentum_type)
 
 
 def main():
     parser = argparse.ArgumentParser(description='dropout experiments on cifar-100')
     parser.add_argument('--architecture', choices=['dnn', 'allConvB', 'allConvC'], help='network architecture',
+                        required=True)
+    parser.add_argument('--opt', choices=['adam', 'linear', 'schedule'], help='optimization method',
                         required=True)
     parser.add_argument('--num_epochs', type=int, default=1000, help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='Number of instances in each batch')
@@ -285,6 +293,7 @@ def main():
     batch_mc = args.batch_mc
     num_labels = 100
     architecture = args.architecture
+    opt = args.opt
 
     # Load the dataset
     logger.info("Loading data...")
@@ -365,7 +374,7 @@ def main():
     momentum_type = args.momentum_type
     momentum_increase_rate = 0.05
     max_norm = args.max_norm
-    updates = create_updates(architecture, loss_train, network, learning_rate_cnn=learning_rate_cnn,
+    updates = create_updates(architecture, opt, loss_train, network, learning_rate_cnn=learning_rate_cnn,
                              learning_rate_dense=learning_rate_dense, momentum=momentum0, momentum_type=momentum_type,
                              max_norm=max_norm)
 
@@ -377,9 +386,10 @@ def main():
                               [loss_eval, loss_eval_mc, loss_test_expect_linear, corr_eval, corr_eval_mc])
 
     logger.info(
-        "Start training with regularization: %s(%f), max-norm(%.1f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
-        % (regular, (0.0 if regular == 'none' else gamma), max_norm, momentum_type, num_epochs, num_data, batch_size,
-           delta))
+        "Start training with regularization: %s(%f), opt: %s, max-norm(%.1f), momentum: %s, (#epoch: %d, #training data: %d, batch size: %d, delta: %f)..." \
+        % (
+        regular, (0.0 if regular == 'none' else gamma), opt, max_norm, momentum_type, num_epochs, num_data, batch_size,
+        delta))
 
     num_batches = num_data / batch_size
     num_batches_test = num_data_test / batch_mc
@@ -504,7 +514,7 @@ def main():
             best_mc_corr_mc, test_inst, best_mc_corr * 100 / test_inst, best_mc_corr_mc * 100 / test_inst,
             best_mc_epoch)
 
-        if architecture == 'dnn':
+        if architecture == 'linear':
             # re-compile a function with new learning rate for training
             lr_cnn = learning_rate_cnn / (1.0 + epoch * decay_rate_cnn)
             lr_dense = learning_rate_dense / (1.0 + epoch * decay_rate_dense)
@@ -514,22 +524,28 @@ def main():
             else:
                 momentum = (1 - f) * momentum0 + f * momentum1
 
-            updates = create_updates(architecture, loss_train, network, learning_rate_cnn=lr_cnn,
+            updates = create_updates(architecture, opt, loss_train, network, learning_rate_cnn=lr_cnn,
                                      learning_rate_dense=lr_dense,
                                      momentum=momentum, momentum_type=momentum_type, max_norm=max_norm)
 
             train_fn = theano.function([input_var, target_var],
                                        [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
                                        updates=updates)
-        elif epoch in [200, 250, 300]:
-            lr_cnn = lr_cnn * decay_rate_cnn
-            updates = create_updates(architecture, loss_train, network, learning_rate_cnn=lr_cnn,
-                                     learning_rate_dense=lr_dense,
-                                     momentum=momentum, momentum_type=momentum_type, max_norm=max_norm)
+        elif opt in ['adam', 'schedule']:
+            if architecture == 'dnn':
+                raise ValueError('value error: dnn cannot have optimization method %s' % opt)
 
-            train_fn = theano.function([input_var, target_var],
-                                       [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
-                                       updates=updates)
+            if opt == 'schedule' and epoch in [200, 250, 300]:
+                lr_cnn = lr_cnn * decay_rate_cnn
+                updates = create_updates(architecture, loss_train, network, learning_rate_cnn=lr_cnn,
+                                         learning_rate_dense=lr_dense,
+                                         momentum=momentum, momentum_type=momentum_type, max_norm=max_norm)
+
+                train_fn = theano.function([input_var, target_var],
+                                           [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
+                                           updates=updates)
+        else:
+            raise ValueError('unkown optimization algorithm: %s' % opt)
 
     # print last and best performance on test data.
     logger.info("final test performance (at epoch %d)" % num_epochs)

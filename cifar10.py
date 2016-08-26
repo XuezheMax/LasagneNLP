@@ -535,6 +535,8 @@ def main():
                 train_fn = theano.function([input_var, target_var],
                                            [loss_train, loss_train_org, loss_train_expect_linear, corr_train],
                                            updates=updates)
+        else:
+            raise ValueError('unkown optimization algorithm: %s' % opt)
 
     # print last and best performance on test data.
     logger.info("final test performance (at epoch %d)" % num_epochs)
