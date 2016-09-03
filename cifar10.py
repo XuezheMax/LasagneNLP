@@ -149,47 +149,43 @@ def build_allConvC(input_var=None):
     network = lasagne.layers.dropout(network, p=0.2)
     # The first CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=96, filter_size=(3, 3), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn1')
     # The second CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=96, filter_size=(3, 3), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn2')
-    # The third CNN layer
-    network = lasagne.layers.Conv2DLayer(network, num_filters=96, filter_size=(3, 3), stride=(2, 2), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
-                                         name='cnn3')
+    # The Pooling layer
+    network = lasagne.layers.MaxPool2DLayer(network, pool_size=(3, 3), stride=(2, 2))
     # Dropout layer
     network = lasagne.layers.dropout(network, p=0.5)
 
     # ------------------------------------------------------------
     # The first CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=192, filter_size=(3, 3), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn4')
     # The second CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=192, filter_size=(3, 3), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn5')
-    # The third CNN layer
-    network = lasagne.layers.Conv2DLayer(network, num_filters=192, filter_size=(3, 3), stride=(2, 2), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
-                                         name='cnn6')
+    # The Pooling layer
+    network = lasagne.layers.MaxPool2DLayer(network, pool_size=(3, 3), stride=(2, 2))
     # Dropout layer
     network = lasagne.layers.dropout(network, p=0.5)
 
     # ------------------------------------------------------------
     # The first CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=192, filter_size=(3, 3), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn7')
     # The second CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=192, filter_size=(1, 1), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn8')
     # The third CNN layer
     network = lasagne.layers.Conv2DLayer(network, num_filters=10, filter_size=(1, 1), stride=(1, 1), pad='same',
-                                         W=lasagne.init.Normal(std=0.05), b=None, nonlinearity=nonlinearities.rectify,
+                                         W=lasagne.init.Normal(std=0.05), nonlinearity=nonlinearities.rectify,
                                          name='cnn9')
     # Global pooling layer
     network = lasagne.layers.GlobalPoolLayer(network)
