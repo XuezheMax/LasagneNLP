@@ -299,7 +299,7 @@ def main():
     target_var = T.ivector('targets')
 
     # Create neural network model (depending on first command line parameter)
-    logger.info("Building model and compiling functions...")
+    logger.info("Building model and compiling functions (architecture: %s)..." % architecture)
     network = build_network(input_var=input_var, architecture=architecture)
 
     # get prediction
