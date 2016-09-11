@@ -51,6 +51,8 @@ def build_network(input_var=None, architecture='dnn'):
         return build_dnn(input_var)
     elif architecture == 'allConvB':
         return build_allConvB(input_var)
+    elif architecture == 'convC':
+        return build_convC(input_var);
     elif architecture == 'allConvC':
         return build_allConvC(input_var)
     else:
