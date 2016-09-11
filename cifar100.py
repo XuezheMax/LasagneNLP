@@ -52,7 +52,7 @@ def build_network(input_var=None, architecture='dnn'):
     elif architecture == 'allConvB':
         return build_allConvB(input_var)
     elif architecture == 'convC':
-        return build_convC(input_var);
+        return build_convC(input_var)
     elif architecture == 'allConvC':
         return build_allConvC(input_var)
     else:
@@ -361,7 +361,7 @@ def main():
 
     # Create neural network model (depending on first command line parameter)
     logger.info("Building model and compiling functions (architecture: %s)..." % architecture)
-    network = build_dnn(input_var=input_var)
+    network = build_network(input_var=input_var, architecture=architecture)
 
     # get prediction
     prediction_train = lasagne.layers.get_output(network)
