@@ -531,7 +531,7 @@ def main():
             if architecture == 'dnn':
                 raise ValueError('value error: dnn cannot have optimization method %s' % opt)
 
-            if opt == 'schedule' and epoch in [200, 250, 300]:
+            if opt == 'schedule' and epoch in [200, 300, 400]:
                 lr_cnn = lr_cnn * decay_rate_cnn
                 updates = create_updates(architecture, opt, loss_train, network, learning_rate_cnn=lr_cnn,
                                          learning_rate_dense=lr_dense,
