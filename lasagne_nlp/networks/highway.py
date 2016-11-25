@@ -56,13 +56,13 @@ class HighwayDenseLayer(Layer):
 
         self.W_h = self.add_param(W_h, (num_inputs, num_inputs), name="W_h")
         if b_h is None:
-            self.b_h = None;
+            self.b_h = None
         else:
             self.b_h = self.add_param(b_h, (num_inputs,), name="b_h", regularizable=False)
 
         self.W_t = self.add_param(W_t, (num_inputs, num_inputs), name="W_t")
         if b_t is None:
-            self.b_t = None;
+            self.b_t = None
         else:
             self.b_t = self.add_param(b_t, (num_inputs,), name="b_t", regularizable=False)
 
@@ -89,6 +89,6 @@ class HighwayDenseLayer(Layer):
         output = activation * transform + input_reshape * carry
         # reshape output back to orignal input_shape
         if input.ndim > 2:
-            output = output.reshape(input.shape)
+            output = T.reshape(output, input.shape)
 
         return output
