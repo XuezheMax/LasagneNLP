@@ -10,12 +10,12 @@ import lasagne
 import lasagne.nonlinearities as nonlinearities
 from lasagne.layers import RecurrentLayer, Gate, LSTMLayer, GRULayer, DenseLayer
 
-BINOMINAL = True
-LENGTH = 10
-NUM_UNITS = 2
+BINOMINAL = False
+LENGTH = 20
+NUM_UNITS = 64
 USE_EMBEDD = False
 POSITION = 0
-BATCH_SIZE = 100
+BATCH_SIZE = 128
 
 
 def get_batch(batch_size, pos, binominal):
@@ -129,9 +129,9 @@ def exe_lstm(use_embedd=False):
     layer_lstm = LSTMLayer(layer_input, NUM_UNITS, ingate=ingate, forgetgate=forgetgate, cell=cell, outgate=outgate,
                            peepholes=False, nonlinearity=nonlinearities.tanh, only_return_final=True, name='LSTM')
 
-    W = layer_lstm.W_hid_to_cell
-    U = layer_lstm.W_in_to_cell
-    b = layer_lstm.b_cell
+    W = layer_lstm.W_hid_to_cell.sum()
+    U = layer_lstm.W_in_to_cell.sum()
+    b = layer_lstm.b_cell.sum()
 
     layer_output = DenseLayer(layer_lstm, num_units=1, nonlinearity=nonlinearities.sigmoid, name='output')
 
