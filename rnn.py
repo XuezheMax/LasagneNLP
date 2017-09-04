@@ -69,7 +69,7 @@ def train(layer_output, input_var, target_var, W, U, b, batch_size):
             # update log
             sys.stdout.write("\b" * num_back)
             log_info = 'inst: %d loss: %.4f, corr: %d, acc: %.2f%%, W: %.6f, U: %.6f, b: %.6f' % (
-                num_inst, loss / num_inst, correct, correct * 100 / num_inst, w.sum(), u.sum(), b.sum())
+                num_inst, loss / num_inst, correct, correct * 100 / num_inst, w, u, b)
             sys.stdout.write(log_info)
             num_back = len(log_info)
             # raw_input()
@@ -94,9 +94,9 @@ def exe_rnn(use_embedd=False):
     layer_rnn = RecurrentLayer(layer_input, NUM_UNITS, nonlinearity=nonlinearities.tanh, only_return_final=True,
                                W_in_to_hid=lasagne.init.GlorotUniform(), W_hid_to_hid=lasagne.init.GlorotUniform(),
                                b=lasagne.init.Constant(0.), name='RNN')
-    W = layer_rnn.W_hid_to_hid
-    U = layer_rnn.W_in_to_hid
-    b = layer_rnn.b
+    W = layer_rnn.W_hid_to_hid.sum()
+    U = layer_rnn.W_in_to_hid.sum()
+    b = layer_rnn.b.sum()
 
     layer_output = DenseLayer(layer_rnn, num_units=1, nonlinearity=nonlinearities.sigmoid, name='output')
 
