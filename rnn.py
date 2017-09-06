@@ -207,6 +207,7 @@ def main():
         fp.write('%.2f\n\n' % (result / num_runs))
         fp.flush()
 
+        result = 0.
         position = (length - 1) / 2
         fp.write('length=%d, pos=%d:\n' % (length, position))
         fp.flush()
